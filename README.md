@@ -21,6 +21,9 @@ A Flutter mobile application for multilingual translation.
 ## Developer
 Theoneste Isezerano  
 Data Scientist
+0785446324
+isezeranotheoneste@gmail.com
+primedataconsultinggroup.rw@gmail.com
 
 ## Installation
 
