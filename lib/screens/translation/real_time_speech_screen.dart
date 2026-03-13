@@ -1,5 +1,3 @@
-import 'dart:io';
-import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 import 'package:flutter_tts/flutter_tts.dart';
@@ -7,8 +5,8 @@ import 'package:file_picker/file_picker.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
-import 'package:path_provider/path_provider.dart';
 import '../../core/constants/languages.dart';
+import 'package:flutter/services.dart';
 
 class RealTimeSpeechScreen extends StatefulWidget {
   const RealTimeSpeechScreen({Key? key}) : super(key: key);
@@ -34,7 +32,7 @@ class _RealTimeSpeechScreenState extends State<RealTimeSpeechScreen>
   String _recognizedText = '';
   String _translatedText = '';
   String _sourceLanguage = 'en';
-  String _targetLanguage = 'rw';
+  String _targetLanguage = 'fr';
   double _confidence = 0.0;
   
   // Output Options
@@ -45,7 +43,7 @@ class _RealTimeSpeechScreenState extends State<RealTimeSpeechScreen>
   late AnimationController _animationController;
   
   // Audio File Upload
-  File? _selectedAudioFile;
+  PlatformFile? _selectedAudioFile;
   String? _fileName;
   
   // History
@@ -79,75 +77,88 @@ class _RealTimeSpeechScreenState extends State<RealTimeSpeechScreen>
 
   // ============ TEXT-TO-SPEECH INIT ============
   Future<void> _initTTS() async {
-    await _flutterTts.setLanguage(_targetLanguage);
-    await _flutterTts.setSpeechRate(0.5);
-    await _flutterTts.setVolume(1.0);
-    await _flutterTts.setPitch(1.0);
-    
-    _flutterTts.setCompletionHandler(() {
-      setState(() => _isPlayingAudio = false);
-    });
-  }
+  String locale = _targetLanguage == 'fr' ? 'fr-FR' : 'en-US';
 
+  await _flutterTts.setLanguage(locale);
+  await _flutterTts.setSpeechRate(0.5);
+  await _flutterTts.setVolume(1.0);
+  await _flutterTts.setPitch(1.0);
+
+  _flutterTts.setCompletionHandler(() {
+    setState(() => _isPlayingAudio = false);
+  });
+}
   // ============ LIVE RECORDING ============
   Future<void> _startListening() async {
-    bool available = await _speech.initialize(
-      onStatus: (status) {
-        print('Speech status: $status');
-        if (status == 'done') {
-          setState(() => _isListening = false);
-          _animationController.stop();
-        }
-      },
-      onError: (error) => print('Speech error: $error'),
-    );
+  bool available = await _speech.initialize(
+    onStatus: (status) {
+      debugPrint('Speech status: $status');
 
-    if (available) {
+      if (status == 'done' || status == 'notListening') {
+        setState(() => _isListening = false);
+        _animationController.stop();
+      }
+    },
+    onError: (error) {
+      debugPrint('Speech error: $error');
+      setState(() => _isListening = false);
+      _animationController.stop();
+      _showSnackBar('Speech recognition error', Colors.red);
+    },
+  );
+
+  if (!available) {
+    _showSnackBar('Speech recognition not available', Colors.red);
+    return;
+  }
+
+  setState(() {
+    _isListening = true;
+    _recognizedText = '';
+  });
+
+  _animationController.repeat(reverse: true);
+
+  await _speech.listen(
+    onResult: (result) async {
       setState(() {
-        _isListening = true;
-        _recognizedText = '';
+        _recognizedText = result.recognizedWords;
+        _confidence = result.confidence;
       });
-      _animationController.repeat(reverse: true);
-      
-      await _speech.listen(
-        onResult: (result) async {
-          setState(() {
-            _recognizedText = result.recognizedWords;
-            _confidence = result.confidence;
-          });
-          
-          if (result.finalResult) {
-            await _translateText(result.recognizedWords);
-          }
-        },
-        listenFor: const Duration(seconds: 60),
-        pauseFor: const Duration(seconds: 2),
-        partialResults: true,
-        localeId: _getLocaleFromLanguage(_sourceLanguage),
-      );
-    }
-  }
 
-  Future<void> _stopListening() async {
-    await _speech.stop();
-    setState(() {
-      _isListening = false;
-    });
-    _animationController.stop();
-  }
+      // Trigger translation only when final result
+      if (result.finalResult && result.recognizedWords.isNotEmpty) {
+        await _translateText(result.recognizedWords);
+      }
+    },
+    localeId: _getLocaleFromLanguage(_sourceLanguage),
+    listenMode: stt.ListenMode.confirmation,
+    partialResults: true,
+  );
+}
+
+// ============ STOP LISTENING ============
+Future<void> _stopListening() async {
+  await _speech.stop();
+  _animationController.stop();
+
+  setState(() {
+    _isListening = false;
+  });
+}
 
   // ============ UPLOAD AUDIO FILE ============
   Future<void> _pickAudioFile() async {
     try {
       FilePickerResult? result = await FilePicker.platform.pickFiles(
-        type: FileType.audio,
-        allowMultiple: false,
-        allowedExtensions: ['mp3', 'wav', 'm4a', 'aac', 'ogg'],
-      );
+  type: FileType.custom,
+  allowMultiple: false,
+  allowedExtensions: ['mp3', 'wav', 'm4a', 'aac', 'ogg'],
+);
 
       if (result != null) {
         setState(() {
-          _selectedAudioFile = File(result.files.single.path!);
+          _selectedAudioFile = result.files.single;
           _fileName = result.files.single.name;
           _isUploading = true;
         });
@@ -173,74 +184,84 @@ class _RealTimeSpeechScreenState extends State<RealTimeSpeechScreen>
 
   // ============ TRANSLATE TEXT ============
   Future<void> _translateText(String text) async {
-    if (text.isEmpty) return;
+  if (text.isEmpty) return;
 
-    setState(() => _isTranslating = true);
+  // Allow ONLY English <-> French for now
+  bool isSupportedPair =
+      (_sourceLanguage == 'en' && _targetLanguage == 'fr') ||
+      (_sourceLanguage == 'fr' && _targetLanguage == 'en');
 
-    try {
-      // FREE MyMemory Translation API - No API key required!
-      final url = Uri.parse(
-        'https://api.mymemory.translated.net/get?q=${Uri.encodeComponent(text)}&langpair=${_sourceLanguage}|${_targetLanguage}'
-      );
-      
-      final response = await http.get(url);
-      
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        
-        setState(() {
-          _translatedText = data['responseData']['translatedText'];
-          _isTranslating = false;
-        });
-        
-        // Add to history
-        _conversationHistory.add({
-          'source': text,
-          'translated': _translatedText,
-          'sourceLang': _sourceLanguage,
-          'targetLang': _targetLanguage,
-          'time': DateTime.now(),
-          'type': 'live',
-        });
-        
-        // Handle output based on user preferences
-        await _handleOutput();
-        
-      } else {
-        throw Exception('Translation failed');
-      }
-    } catch (e) {
-      setState(() => _isTranslating = false);
-      
-      // Fallback demo translation
-      setState(() {
-        if (_sourceLanguage == 'en' && _targetLanguage == 'rw') {
-          _translatedText = 'Muraho, amakuru?';
-        } else if (_sourceLanguage == 'en' && _targetLanguage == 'fr') {
-          _translatedText = 'Bonjour, comment allez-vous?';
-        } else {
-          _translatedText = 'Translation: $text';
-        }
-      });
-      
-      _showSnackBar('Using offline translation', Colors.orange);
-      await _handleOutput();
-    }
+  if (!isSupportedPair) {
+    _showSnackBar(
+      '🚧 This language pair will be available soon.',
+      Colors.orange,
+    );
+    return;
   }
 
+  setState(() => _isTranslating = true);
+
+  try {
+    final url = Uri.parse(
+      'https://api.mymemory.translated.net/get'
+      '?q=${Uri.encodeComponent(text)}'
+      '&langpair=${_sourceLanguage}|${_targetLanguage}',
+    );
+
+    final response = await http.get(url);
+
+    if (response.statusCode == 200) {
+      final data = json.decode(response.body);
+
+      final translated =
+          data['responseData']?['translatedText']?.toString() ?? '';
+
+      setState(() {
+        _translatedText = translated;
+        _isTranslating = false;
+      });
+
+      // Add to history
+      _conversationHistory.add({
+        'source': text,
+        'translated': _translatedText,
+        'sourceLang': _sourceLanguage,
+        'targetLang': _targetLanguage,
+        'time': DateTime.now(),
+        'type': 'live',
+      });
+
+      await _handleOutput();
+    } else {
+      throw Exception('Translation failed');
+    }
+  } catch (e) {
+    setState(() => _isTranslating = false);
+
+    // Controlled fallback ONLY for English/French
+    setState(() {
+      if (_sourceLanguage == 'en' && _targetLanguage == 'fr') {
+        _translatedText = 'Bonjour';
+      } else if (_sourceLanguage == 'fr' && _targetLanguage == 'en') {
+        _translatedText = 'Hello';
+      }
+    });
+
+    _showSnackBar(
+      '⚠️ Using demo translation (API unavailable)',
+      Colors.orange,
+    );
+
+    await _handleOutput();
+  }
+}
   // ============ HANDLE OUTPUT (TEXT/AUDIO/BOTH) ============
   Future<void> _handleOutput() async {
-    // Text output
-    if (_outputText) {
-      // Text is already displayed in UI
-    }
-    
-    // Audio output
-    if (_outputAudio && _translatedText.isNotEmpty) {
-      setState(() => _isPlayingAudio = true);
-      await _flutterTts.speak(_translatedText);
-    }
+  if (_outputAudio && _translatedText.isNotEmpty) {
+    setState(() => _isPlayingAudio = true);
+    await _flutterTts.speak(_translatedText);
   }
+}
 
   // ============ PLAY/STOP AUDIO ============
   void _toggleAudioPlayback() {
@@ -267,25 +288,26 @@ class _RealTimeSpeechScreenState extends State<RealTimeSpeechScreen>
 
   // ============ LOCALE HELPER ============
   String _getLocaleFromLanguage(String languageCode) {
-    final languageMap = {
-      'en': 'en_US',
-      'rw': 'rw_RW',
-      'fr': 'fr_FR',
-      'sw': 'sw_TZ',
-    };
-    return languageMap[languageCode] ?? 'en_US';
+  switch (languageCode) {
+    case 'en':
+      return 'en_US';
+    case 'fr':
+      return 'fr_FR';
+    default:
+      return 'en_US';
   }
+}
 
   // ============ SWAP LANGUAGES ============
   void _swapLanguages() {
-    setState(() {
-      final temp = _sourceLanguage;
-      _sourceLanguage = _targetLanguage;
-      _targetLanguage = temp;
-      _initTTS();
-    });
-  }
+  setState(() {
+    final temp = _sourceLanguage;
+    _sourceLanguage = _targetLanguage;
+    _targetLanguage = temp;
+  });
 
+  _initTTS();
+}
   // ============ UI HELPERS ============
   void _showSnackBar(String message, Color color) {
     ScaffoldMessenger.of(context).showSnackBar(
@@ -763,10 +785,10 @@ class _RealTimeSpeechScreenState extends State<RealTimeSpeechScreen>
                         children: [
                           IconButton(
                             icon: const Icon(Icons.copy),
-                            onPressed: () {
-                              // Copy to clipboard
+                            onPressed: () async {
+                              await Clipboard.setData(ClipboardData(text: _translatedText));
                               _showSnackBar('Copied to clipboard!', Colors.green);
-                            },
+},
                             color: Colors.blue,
                           ),
                           IconButton(
