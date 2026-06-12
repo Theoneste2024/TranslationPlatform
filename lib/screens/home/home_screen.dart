@@ -18,9 +18,10 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   // Color constants for easy maintenance
-  static const Color _blueColor = Color(0xFF00A1DE);
-  static const Color _greenColor = Color(0xFF20603D);
-  static const Color _yellowColor = Color(0xFFE1BD00);
+  static const Color primaryColor = Color(0xFF003D82); // Dark Sky Blue
+  static const Color _blueColor = Color(0xFF003D82); // Dark Sky Blue
+  static const Color _greenColor = Color(0xFF003D82); // Dark Sky Blue
+  static const Color _yellowColor = Color(0xFF003D82); // Dark Sky Blue
 
   @override
   Widget build(BuildContext context) {

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import '../../core/constants/app_constants.dart';
+import 'package:flutter/services.dart';
 
 class TextTranslationScreen extends StatefulWidget {
   const TextTranslationScreen({Key? key}) : super(key: key);
@@ -29,56 +31,44 @@ class _TextTranslationScreenState extends State<TextTranslationScreen> {
     super.dispose();
   }
 
-  // ✅ REAL TRANSLATION USING MyMemory API - FREE, NO KEY NEEDED!
   Future<void> _translate() async {
-    if (_sourceController.text.isEmpty) return;
-    
-    setState(() => _isTranslating = true);
-    
-    try {
-      // MyMemory Translation API - Completely Free, No API Key Required
-      final url = Uri.parse(
-        'https://api.mymemory.translated.net/get?q=${Uri.encodeComponent(_sourceController.text)}&langpair=${_sourceLanguage}|${_targetLanguage}'
-      );
-      
-      final response = await http.get(url);
-      
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        
-        setState(() {
-          _targetController.text = data['responseData']['translatedText'];
-          _isTranslating = false;
-        });
-        
-        // Show success message
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('✅ Translated successfully!'),
-            backgroundColor: Colors.green,
-            duration: const Duration(seconds: 1),
-          ),
-        );
-      } else {
-        throw Exception('Translation failed');
-      }
-    } catch (e) {
-      setState(() => _isTranslating = false);
-      
-      // ❌ FALLBACK: If API fails, show demo translation
+  if (_sourceController.text.isEmpty) return;
+
+  setState(() => _isTranslating = true);
+
+  try {
+    final response = await http.post(
+      Uri.parse(AppConstants.textTranslate),
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: jsonEncode({
+        "text": _sourceController.text,
+        "source_language": _sourceLanguage,
+        "target_language": _targetLanguage,
+      }),
+    );
+
+    final data = jsonDecode(response.body);
+
+    if (response.statusCode == 200) {
       setState(() {
-        _targetController.text = _getDemoTranslation(_sourceController.text);
+        _targetController.text = data["translated_text"];
       });
-      
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('⚠️ Using offline translation (API unavailable)'),
-          backgroundColor: Colors.orange,
-          duration: const Duration(seconds: 2),
-        ),
-      );
+    } else {
+      throw Exception(data["error"]);
     }
+  } catch (e) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text("Translation failed: $e"),
+        backgroundColor: Colors.red,
+      ),
+    );
   }
+
+  setState(() => _isTranslating = false);
+}
 
   // ✅ FALLBACK DEMO TRANSLATIONS (when no internet)
   String _getDemoTranslation(String text) {
@@ -381,8 +371,15 @@ class _TextTranslationScreenState extends State<TextTranslationScreen> {
                           children: [
                             IconButton(
                               icon: const Icon(Icons.copy),
-                              onPressed: () {
-                                // Copy to clipboard
+                              onPressed: () async {
+                                  // Copy to clipboard
+                                  await Clipboard.setData(
+                                  ClipboardData(text: _targetController.text),);
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text("Copied to clipboard!"),
+                                      ),
+                                      );
                               },
                               color: Colors.blue.shade700,
                             ),

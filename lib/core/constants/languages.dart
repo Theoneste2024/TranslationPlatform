@@ -22,12 +22,19 @@ class Languages {
       isOfflineSupported: true,
     ),
     LanguageModel(
+      code: 'sw',
+      name: 'Swahili',
+      nativeName: 'Kiswahili',
+      flagEmoji: '🇰🇪',
+    ),
+    LanguageModel(
       code: 'kin',
       name: 'Kinyarwanda (Rural)',
       nativeName: 'Ikinyarwanda cy\'icyaro',
       flagEmoji: '🇷🇼',
       isOfflineSupported: true,
     ),
+   
   ];
 
   static const List<LanguageModel> globalLanguages = [
