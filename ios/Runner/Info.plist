@@ -26,6 +26,10 @@
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>NSCameraUsageDescription</key>
+	<string>Translation Platform needs camera access to record videos for translation and summarization.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Translation Platform needs microphone access to capture audio from recorded videos.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

@@ -1,15 +1,19 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
 import 'package:chewie/chewie.dart';
+import 'package:omni_video_player/omni_video_player.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:speech_to_text/speech_to_text.dart' as stt;
-import 'package:flutter_tts/flutter_tts.dart';
+import 'package:camera/camera.dart';
+import 'dart:typed_data';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
-import 'package:path_provider/path_provider.dart';
-import 'package:audioplayers/audioplayers.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:permission_handler/permission_handler.dart';
+import '../../core/constants/app_constants.dart';
+import 'package:path/path.dart' as p;
 
 class VideoTranslationScreen extends StatefulWidget {
   const VideoTranslationScreen({Key? key}) : super(key: key);
@@ -18,19 +22,21 @@ class VideoTranslationScreen extends StatefulWidget {
   State<VideoTranslationScreen> createState() => _VideoTranslationScreenState();
 }
 
-class _VideoTranslationScreenState extends State<VideoTranslationScreen> with SingleTickerProviderStateMixin {
+class _VideoTranslationScreenState extends State<VideoTranslationScreen> {
   // Controllers
   final TextEditingController _urlController = TextEditingController();
   
   // Video Players
   VideoPlayerController? _videoController;
   ChewieController? _chewieController;
+  OmniPlaybackController? _youtubeController;
+  StreamSubscription<String>? _liveTranslationSubscription;
+  Timer? _liveTranslationWatchdog;
   
   // UI States
   bool _isLoading = false;
   bool _isTranslating = false;
-  bool _isTranscribing = false;
-  bool _isPlayingTranslated = false;
+  bool _isSummarizing = false;
   
   // Language Selection
   String _sourceLanguage = 'auto';
@@ -44,57 +50,59 @@ class _VideoTranslationScreenState extends State<VideoTranslationScreen> with Si
   // Transcription & Translation
   String _originalTranscript = '';
   String _translatedText = '';
+  String _summaryText = '';
+  String _summaryLanguageName = '';
   List<Map<String, dynamic>> _subtitles = [];
-  
-  // Audio Players
-  final AudioPlayer _audioPlayer = AudioPlayer();
-  late stt.SpeechToText _speech;
-  late FlutterTts _flutterTts;
-  
-  // Animation
-  late AnimationController _animationController;
+  String _liveSubtitleText = '';
+  String _liveStatus = '';
+  int _liveTranslationRunId = 0;
+  static const Duration _liveTranslationIdleTimeout = Duration(minutes: 3);
   
   // Media Source Type
   String _videoSource = 'youtube';
   File? _selectedMediaFile;
-  String? _mediaType; // 'youtube', 'video', 'audio'
+  Uint8List? _selectedMediaBytes;
+  String? _selectedMediaFileName;
+  String? _mediaType; // 'youtube', 'video'
+  // Hover states for chips
+  bool _hoverYouTube = false;
+  bool _hoverVideo = false;
 
   @override
   void initState() {
     super.initState();
-    _speech = stt.SpeechToText();
-    _flutterTts = FlutterTts();
-    _animationController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1500),
-    );
-    _initTTS();
-    
-    _audioPlayer.onPlayerComplete.listen((event) {
-      setState(() => _isPlayingTranslated = false);
-    });
   }
 
   @override
   void dispose() {
     _urlController.dispose();
+    _liveTranslationSubscription?.cancel();
+    _liveTranslationWatchdog?.cancel();
+    _youtubeController?.removeListener(_syncLiveSubtitleToPlayback);
     _videoController?.dispose();
     _chewieController?.dispose();
-    _audioPlayer.dispose();
-    _flutterTts.stop();
-    _animationController.dispose();
     super.dispose();
   }
 
-  Future<void> _initTTS() async {
-    await _flutterTts.setLanguage(_targetLanguage);
-    await _flutterTts.setSpeechRate(0.5);
-    await _flutterTts.setVolume(1.0);
-    await _flutterTts.setPitch(1.0);
-    
-    _flutterTts.setCompletionHandler(() {
-      setState(() => _isPlayingTranslated = false);
+  void _resetLiveTranslationWatchdog(int runId) {
+    _liveTranslationWatchdog?.cancel();
+    _liveTranslationWatchdog = Timer(_liveTranslationIdleTimeout, () {
+      if (!mounted || runId != _liveTranslationRunId || !_isTranslating) return;
+      _liveTranslationSubscription?.cancel();
+      setState(() {
+        _isTranslating = false;
+        _liveStatus = 'Live translation timed out. Please try again with a shorter video.';
+      });
+      _showSnackBar(
+        'Live translation timed out. Please try again with a shorter video.',
+        Colors.red,
+      );
     });
+  }
+
+  void _stopLiveTranslationWatchdog() {
+    _liveTranslationWatchdog?.cancel();
+    _liveTranslationWatchdog = null;
   }
 
   void _setVideoSource(String source) {
@@ -102,15 +110,99 @@ class _VideoTranslationScreenState extends State<VideoTranslationScreen> with Si
       _videoSource = source;
       _urlController.clear();
       _selectedMediaFile = null;
+      _selectedMediaBytes = null;
+      _selectedMediaFileName = null;
       _videoController?.dispose();
       _chewieController?.dispose();
+      _liveTranslationSubscription?.cancel();
+      _youtubeController?.removeListener(_syncLiveSubtitleToPlayback);
+      _youtubeController = null;
       _videoController = null;
       _chewieController = null;
       _originalTranscript = '';
       _translatedText = '';
+      _summaryText = '';
+      _summaryLanguageName = '';
+      _liveSubtitleText = '';
+      _liveStatus = '';
       _subtitles.clear();
       _mediaType = null;
     });
+  }
+
+  Future<bool> _requestVideoRecordingPermissions() async {
+    if (kIsWeb) {
+      return true;
+    }
+
+    final cameraStatus = await Permission.camera.status;
+    final microphoneStatus = await Permission.microphone.status;
+    if (cameraStatus.isGranted && microphoneStatus.isGranted) {
+      return true;
+    }
+
+    if (cameraStatus.isPermanentlyDenied || microphoneStatus.isPermanentlyDenied) {
+      _showSnackBar('Camera or microphone access is permanently denied. Please enable it in app settings.', Colors.orange);
+      return false;
+    }
+
+    final requested = await [
+      Permission.camera,
+      Permission.microphone,
+    ].request();
+    if (requested[Permission.camera]?.isGranted == true &&
+        requested[Permission.microphone]?.isGranted == true) {
+      return true;
+    }
+
+    _showSnackBar('Camera and microphone permissions are required to record video.', Colors.orange);
+    return false;
+  }
+
+  Future<void> _showVideoSourcePicker() async {
+    if (!mounted) return;
+
+    await showModalBottomSheet<void>(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  'Choose how to provide your video',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 12),
+                ListTile(
+                  leading: const Icon(Icons.videocam, color: Colors.blue),
+                  title: const Text('Record video'),
+                  subtitle: const Text('Use your camera to capture a new video'),
+                  onTap: () async {
+                    Navigator.pop(context);
+                    await _recordVideo();
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.upload_file, color: Colors.green),
+                  title: const Text('Upload video from local storage'),
+                  subtitle: const Text('Pick a video file from your device'),
+                  onTap: () async {
+                    Navigator.pop(context);
+                    await _pickVideoFile();
+                  },
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
   }
 
   Future<void> _pickVideoFile() async {
@@ -118,254 +210,444 @@ class _VideoTranslationScreenState extends State<VideoTranslationScreen> with Si
       FilePickerResult? result = await FilePicker.platform.pickFiles(
         type: FileType.video,
         allowMultiple: false,
-        allowedExtensions: ['mp4', 'mov', 'avi', 'mkv', 'webm', '3gp', 'm4v'],
       );
 
-      if (result != null) {
+      if (result == null || result.files.isEmpty) {
+        _showSnackBar('No video file was selected.', Colors.orange);
+        return;
+      }
+
+      final picked = result.files.single;
+      if (picked.bytes != null) {
         setState(() {
-          _selectedMediaFile = File(result.files.single.path!);
+          _selectedMediaBytes = picked.bytes;
+          _selectedMediaFileName = picked.name;
+          _selectedMediaFile = null;
           _mediaType = 'video';
+          _videoSource = 'file';
         });
-        _showSnackBar('✅ Video selected: ${result.files.single.name}', Colors.green);
-      }
-    } catch (e) {
-      _showSnackBar('Error picking video: $e', Colors.red);
-    }
-  }
-
-  Future<void> _pickAudioFile() async {
-    try {
-      FilePickerResult? result = await FilePicker.platform.pickFiles(
-        type: FileType.audio,
-        allowMultiple: false,
-        allowedExtensions: ['mp3', 'wav', 'm4a', 'aac', 'ogg', 'flac', 'wma'],
-      );
-
-      if (result != null) {
-        File audioFile = File(result.files.single.path!);
+      } else if (picked.path != null) {
         setState(() {
-          _selectedMediaFile = audioFile;
-          _mediaType = 'audio';
-          _isLoading = true;
-        });
-        
-        _showSnackBar('✅ Audio selected: ${result.files.single.name}', Colors.green);
-        await _processAudioFile(audioFile);
-      }
-    } catch (e) {
-      setState(() => _isLoading = false);
-      _showSnackBar('Error picking audio: $e', Colors.red);
-    }
-  }
-
-  Future<void> _processAudioFile(File audioFile) async {
-    setState(() {
-      _isTranscribing = true;
-      _originalTranscript = '';
-    });
-
-    _animationController.repeat(reverse: true);
-    
-    await Future.delayed(const Duration(seconds: 3));
-    
-    setState(() {
-      _originalTranscript = "This is the transcribed text from the audio file '${audioFile.path.split('/').last}'. In a production app, this would use actual speech recognition to convert the audio to text.";
-      _isTranscribing = false;
-      _isLoading = false;
-    });
-    
-    _animationController.stop();
-    _showSnackBar('✅ Audio transcribed!', Colors.green);
-  }
-
-  bool _isYouTubeUrl(String url) {
-    return url.contains('youtube.com/') || 
-           url.contains('youtu.be/') || 
-           url.contains('m.youtube.com/') ||
-           url.contains('youtube.com/shorts/');
-  }
-
-  String? _extractYouTubeVideoId(String url) {
-    RegExp regExp = RegExp(
-      r'(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})',
-    );
-    Match? match = regExp.firstMatch(url);
-    return match?.group(1);
-  }
-
-  Future<void> _loadVideo() async {
-    if (_videoSource == 'youtube' && _urlController.text.isEmpty) {
-      _showSnackBar('Please enter a URL', Colors.orange);
-      return;
-    }
-    
-    if (_videoSource == 'file' && _selectedMediaFile == null) {
-      _showSnackBar('Please select a media file', Colors.orange);
-      return;
-    }
-
-    setState(() => _isLoading = true);
-
-    try {
-      if (_videoSource == 'youtube') {
-        String url = _urlController.text.trim();
-        
-        if (_isYouTubeUrl(url)) {
-          String? videoId = _extractYouTubeVideoId(url);
-          if (videoId != null) {
-            _mediaType = 'youtube';
-            _showSnackBar('✅ YouTube video loaded!', Colors.green);
-            setState(() => _isLoading = false);
-            return;
-          }
-        } else {
-          _videoController = VideoPlayerController.networkUrl(Uri.parse(url));
-          await _videoController!.initialize();
-          
-          _chewieController = ChewieController(
-            videoPlayerController: _videoController!,
-            autoPlay: true,
-            looping: false,
-            aspectRatio: _videoController!.value.aspectRatio,
-            allowFullScreen: true,
-            allowMuting: true,
-            showControls: true,
-            materialProgressColors: ChewieProgressColors(
-              playedColor: Colors.blue,
-              bufferedColor: Colors.lightBlue.shade200,
-              handleColor: Colors.blue,
-              backgroundColor: Colors.grey.shade300,
-            ),
-          );
+          _selectedMediaFile = File(picked.path!);
+          _selectedMediaBytes = null;
+          _selectedMediaFileName = picked.name;
           _mediaType = 'video';
-        }
-      } else {
-        if (_mediaType == 'audio') {
-          setState(() => _isLoading = false);
-          return;
-        } else {
-          _videoController = VideoPlayerController.file(_selectedMediaFile!);
-          await _videoController!.initialize();
-          
-          _chewieController = ChewieController(
-            videoPlayerController: _videoController!,
-            autoPlay: true,
-            looping: false,
-            aspectRatio: _videoController!.value.aspectRatio,
-            allowFullScreen: true,
-            allowMuting: true,
-            showControls: true,
-            materialProgressColors: ChewieProgressColors(
-              playedColor: Colors.blue,
-              bufferedColor: Colors.lightBlue.shade200,
-              handleColor: Colors.blue,
-              backgroundColor: Colors.grey.shade300,
-            ),
-          );
-          _mediaType = 'video';
-        }
-      }
-
-      setState(() => _isLoading = false);
-      
-      if (_mediaType == 'youtube' || _mediaType == 'video' || _mediaType == 'audio') {
-        Future.delayed(const Duration(milliseconds: 500), () {
-          if (mounted) {
-            _startTranscription();
-          }
+          _videoSource = 'file';
         });
       }
-      
+      _showSnackBar('✅ Video selected: ${picked.name}', Colors.green);
     } catch (e) {
-      setState(() => _isLoading = false);
-      _showSnackBar('Error loading media: ${e.toString()}', Colors.red);
+      _showSnackBar('Unable to pick the video file: $e', Colors.red);
     }
   }
 
-  Future<void> _startTranscription() async {
-    setState(() {
-      _isTranscribing = true;
-      _originalTranscript = '';
-    });
-
-    bool available = await _speech.initialize();
-    
-    if (available) {
-      _animationController.repeat(reverse: true);
-      
-      await Future.delayed(const Duration(seconds: 3));
-      
-      setState(() {
-        _originalTranscript = "This is the transcribed text from the media. In a production app, this would use actual speech recognition to convert the audio to text.";
-        _isTranscribing = false;
-      });
-      
-      _animationController.stop();
-      _showSnackBar('✅ Transcription complete!', Colors.green);
-    } else {
-      setState(() => _isTranscribing = false);
-      _showSnackBar('Speech recognition not available', Colors.orange);
-    }
-  }
-
-  Future<void> _translateText() async {
-    if (_originalTranscript.isEmpty) {
-      _showSnackBar('No transcript to translate', Colors.orange);
-      return;
-    }
-
-    setState(() => _isTranslating = true);
-
+  Future<void> _recordVideo() async {
     try {
-      final url = Uri.parse(
-        'https://api.mymemory.translated.net/get?q=${Uri.encodeComponent(_originalTranscript)}&langpair=en|${_targetLanguage}'
+      final hasPermission = await _requestVideoRecordingPermissions();
+      if (!hasPermission) {
+        return;
+      }
+
+      final XFile? video = await Navigator.of(context).push<XFile>(
+        MaterialPageRoute(
+          builder: (_) => const _VideoRecorderScreen(),
+        ),
       );
-      
-      final response = await http.get(url);
-      
+      if (video == null) {
+        _showSnackBar('No video was recorded.', Colors.orange);
+        return;
+      }
+
+      final recordedFileName = _videoUploadFileName(video);
+      if (kIsWeb) {
+        final bytes = await video.readAsBytes();
+        setState(() {
+          _selectedMediaBytes = bytes;
+          _selectedMediaFileName = recordedFileName;
+          _selectedMediaFile = null;
+          _mediaType = 'video';
+          _videoSource = 'file';
+        });
+      } else if (video.path.isNotEmpty) {
+        setState(() {
+          _selectedMediaFile = File(video.path);
+          _selectedMediaBytes = null;
+          _selectedMediaFileName = recordedFileName;
+          _mediaType = 'video';
+          _videoSource = 'file';
+        });
+      }
+
+      _showSnackBar('✅ Video recorded: ${video.name}', Colors.green);
+    } catch (e) {
+      _showSnackBar('Unable to record the video: $e', Colors.red);
+    }
+  }
+
+  String _videoUploadFileName(XFile video) {
+    final pathName = video.path.isNotEmpty ? p.basename(video.path) : '';
+    final rawName = video.name.isNotEmpty ? video.name : pathName;
+    final rawExtension = p.extension(rawName);
+    if (rawExtension.isNotEmpty) {
+      return rawName;
+    }
+
+    final pathExtension = p.extension(pathName);
+    if (pathExtension.isNotEmpty) {
+      return '$rawName$pathExtension';
+    }
+
+    return 'recorded_video_${DateTime.now().millisecondsSinceEpoch}.mp4';
+  }
+
+  Future<void> _uploadMedia({File? file, Uint8List? bytes, String? filename}) async {
+    if (file == null && bytes == null) {
+      _showSnackBar('No media selected', Colors.orange);
+      return;
+    }
+
+    final runId = ++_liveTranslationRunId;
+    await _liveTranslationSubscription?.cancel();
+    _stopLiveTranslationWatchdog();
+    setState(() {
+      _isTranslating = true;
+      _mediaType = 'youtube';
+      _originalTranscript = '';
+      _translatedText = '';
+      _summaryText = '';
+      _summaryLanguageName = '';
+      _liveSubtitleText = '';
+      _liveStatus = 'Preparing live translated subtitles...';
+      _subtitles.clear();
+    });
+    _resetLiveTranslationWatchdog(runId);
+
+    try {
+      final request = http.MultipartRequest('POST', Uri.parse(AppConstants.videoTranslate));
+      request.fields['source_language'] = _sourceLanguage;
+      request.fields['target_language'] = _targetLanguage;
+
+      if (bytes != null) {
+        request.files.add(
+          http.MultipartFile.fromBytes(
+            'video',
+            bytes,
+            filename: filename ?? 'media.bin',
+          ),
+        );
+      } else if (file != null) {
+        request.files.add(
+          await http.MultipartFile.fromPath(
+            'video',
+            file.path,
+            filename: filename ?? p.basename(file.path),
+          ),
+        );
+      }
+
+      final streamedResponse = await request.send();
+      final response = await http.Response.fromStream(streamedResponse);
+      final data = jsonDecode(response.body);
+
       if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        
         setState(() {
-          _translatedText = data['responseData']['translatedText'];
-          _isTranslating = false;
+          _originalTranscript = data['original_text'] ?? '';
+          _translatedText = data['translated_text'] ?? '';
+          _summaryText = '';
+          _summaryLanguageName = '';
         });
-        
         _showSnackBar('✅ Translation complete!', Colors.green);
-        _speakTranslatedText();
       } else {
-        throw Exception('Translation failed');
+        throw Exception(data['error'] ?? 'Media upload failed');
       }
     } catch (e) {
-      setState(() => _isTranslating = false);
-      
-      setState(() {
-        if (_targetLanguage == 'fr') {
-          _translatedText = 'Ceci est un exemple de traduction.';
-        } else if (_targetLanguage == 'rw') {
-          _translatedText = 'Ubu ni urugero rw\'ubuhinduzi.';
-        } else {
-          _translatedText = 'This is a sample translation.';
-        }
-      });
-      
-      _showSnackBar('Using offline translation', Colors.orange);
+      _showSnackBar('Media upload failed: $e', Colors.red);
+    } finally {
+      if (mounted) {
+        setState(() => _isTranslating = false);
+      }
     }
   }
 
-  Future<void> _speakTranslatedText() async {
-    if (_translatedText.isEmpty) return;
-    setState(() => _isPlayingTranslated = true);
-    await _flutterTts.setLanguage(_targetLanguage);
-    await _flutterTts.speak(_translatedText);
+  // Translate a YouTube URL by streaming timestamped subtitle segments from the backend.
+  Future<void> _translateYouTubeUrl() async {
+    final url = _urlController.text.trim();
+    if (url.isEmpty) {
+      _showSnackBar('Please enter a YouTube URL', Colors.orange);
+      return;
+    }
+
+    final runId = ++_liveTranslationRunId;
+    await _liveTranslationSubscription?.cancel();
+    setState(() {
+      _isTranslating = true;
+      _mediaType = 'youtube';
+      _originalTranscript = '';
+      _translatedText = '';
+      _summaryText = '';
+      _summaryLanguageName = '';
+      _liveSubtitleText = '';
+      _liveStatus = 'Preparing live translated subtitles...';
+      _subtitles.clear();
+    });
+
+    try {
+      final request = http.MultipartRequest(
+        'POST',
+        Uri.parse(AppConstants.videoTranslateStream),
+      );
+      request.fields['youtube_url'] = url;
+      request.fields['source_language'] = _sourceLanguage;
+      request.fields['target_language'] = _targetLanguage;
+
+      final response = await request.send();
+      _resetLiveTranslationWatchdog(runId);
+      if (response.statusCode != 200) {
+        _stopLiveTranslationWatchdog();
+        final body = await response.stream.bytesToString();
+        final data = jsonDecode(body);
+        throw Exception(data['error'] ?? 'YouTube live translation failed');
+      }
+
+      _liveTranslationSubscription = response.stream
+          .transform(utf8.decoder)
+          .transform(const LineSplitter())
+          .listen(
+        (line) {
+          if (runId != _liveTranslationRunId || line.trim().isEmpty) return;
+          _resetLiveTranslationWatchdog(runId);
+          _handleLiveTranslationEvent(jsonDecode(line));
+        },
+        onError: (error) {
+          if (!mounted || runId != _liveTranslationRunId) return;
+          _stopLiveTranslationWatchdog();
+          setState(() => _isTranslating = false);
+          _showSnackBar('YouTube live translation failed: $error', Colors.red);
+        },
+        onDone: () {
+          if (!mounted || runId != _liveTranslationRunId) return;
+          _stopLiveTranslationWatchdog();
+          setState(() {
+            _isTranslating = false;
+            _liveStatus = _subtitles.isEmpty
+                ? 'No spoken phrases were detected.'
+                : 'Live subtitles ready.';
+          });
+        },
+        cancelOnError: true,
+      );
+    } catch (e) {
+      _stopLiveTranslationWatchdog();
+      setState(() => _isTranslating = false);
+      _showSnackBar('YouTube live translation failed: $e', Colors.red);
+    }
   }
 
-  void _toggleAudioPlayback() {
-    if (_isPlayingTranslated) {
-      _flutterTts.stop();
-      setState(() => _isPlayingTranslated = false);
-    } else if (_translatedText.isNotEmpty) {
-      _speakTranslatedText();
+  void _handleLiveTranslationEvent(Map<String, dynamic> event) {
+    final type = event['type'];
+    if (type == 'status') {
+      setState(() => _liveStatus = event['message'] ?? '');
+      return;
+    }
+
+    if (type == 'error') {
+      _stopLiveTranslationWatchdog();
+      setState(() {
+        _isTranslating = false;
+        _liveStatus = '';
+      });
+      _showSnackBar(event['error'] ?? 'Live translation failed', Colors.red);
+      return;
+    }
+
+    if (type == 'complete') {
+      _stopLiveTranslationWatchdog();
+      setState(() {
+        _isTranslating = false;
+        _liveStatus = 'Live subtitles ready.';
+      });
+      return;
+    }
+
+    if (type != 'segment') return;
+
+    final original = (event['original'] ?? '').toString();
+    final translated = (event['translated'] ?? '').toString();
+    final start = (event['start'] as num?)?.toDouble() ?? 0;
+    final rawEnd = (event['end'] as num?)?.toDouble() ?? start + 3;
+    final end = rawEnd <= start ? start + 3 : rawEnd;
+
+    setState(() {
+      _subtitles.add({
+        'startSeconds': start,
+        'endSeconds': end,
+        'start': _formatSubtitleTime(start),
+        'end': _formatSubtitleTime(end),
+        'original': original,
+        'translated': translated,
+      });
+      _originalTranscript = [
+        if (_originalTranscript.isNotEmpty) _originalTranscript,
+        original,
+      ].join(' ');
+      _translatedText = [
+        if (_translatedText.isNotEmpty) _translatedText,
+        translated,
+      ].join(' ');
+      _liveStatus = 'Translated ${_subtitles.length} spoken phrase${_subtitles.length == 1 ? '' : 's'}...';
+    });
+
+    _syncLiveSubtitleToPlayback();
+  }
+
+  void _attachYouTubeController(OmniPlaybackController controller) {
+    if (_youtubeController == controller) return;
+    _youtubeController?.removeListener(_syncLiveSubtitleToPlayback);
+    _youtubeController = controller;
+    _youtubeController?.addListener(_syncLiveSubtitleToPlayback);
+    _syncLiveSubtitleToPlayback();
+  }
+
+  void _syncLiveSubtitleToPlayback() {
+    if (!mounted || _subtitles.isEmpty) return;
+
+    final position = _youtubeController?.currentPosition.inMilliseconds;
+    if (position == null) return;
+
+    final seconds = position / 1000.0;
+    Map<String, dynamic>? activeSubtitle;
+    for (final subtitle in _subtitles.reversed) {
+      final start = (subtitle['startSeconds'] as num?)?.toDouble() ?? 0;
+      final end = (subtitle['endSeconds'] as num?)?.toDouble() ?? start + 3;
+      if (seconds >= start - 0.25 && seconds <= end + 0.75) {
+        activeSubtitle = subtitle;
+        break;
+      }
+    }
+
+    final nextText = activeSubtitle == null
+        ? ''
+        : (activeSubtitle['translated'] ?? '').toString();
+    if (nextText == _liveSubtitleText) return;
+
+    setState(() => _liveSubtitleText = nextText);
+  }
+
+  String _formatSubtitleTime(double seconds) {
+    final duration = Duration(milliseconds: (seconds * 1000).round());
+    final hours = duration.inHours;
+    final minutes = duration.inMinutes.remainder(60).toString().padLeft(2, '0');
+    final secs = duration.inSeconds.remainder(60).toString().padLeft(2, '0');
+    if (hours > 0) {
+      return '${hours.toString().padLeft(2, '0')}:$minutes:$secs';
+    }
+    return '$minutes:$secs';
+  }
+
+  Future<void> _summarizeMedia({File? file, Uint8List? bytes, String? filename}) async {
+    if (file == null && bytes == null) {
+      _showSnackBar('No media selected', Colors.orange);
+      return;
+    }
+
+    setState(() => _isSummarizing = true);
+
+    try {
+      final request = http.MultipartRequest('POST', Uri.parse(AppConstants.videoSummarize));
+      request.fields['source_language'] = _sourceLanguage;
+
+      if (bytes != null) {
+        request.files.add(
+          http.MultipartFile.fromBytes(
+            'video',
+            bytes,
+            filename: filename ?? 'media.bin',
+          ),
+        );
+      } else if (file != null) {
+        request.files.add(
+          await http.MultipartFile.fromPath(
+            'video',
+            file.path,
+            filename: filename ?? p.basename(file.path),
+          ),
+        );
+      }
+
+      final streamedResponse = await request.send();
+      final response = await http.Response.fromStream(streamedResponse);
+      final data = jsonDecode(response.body);
+
+      if (response.statusCode == 200) {
+        setState(() {
+          _originalTranscript = '';
+          _summaryText = data['summary_text'] ?? '';
+          _summaryLanguageName = data['detected_language_name'] ?? '';
+        });
+        _showSnackBar('Summary complete!', Colors.orange);
+      } else {
+        throw Exception(data['error'] ?? 'Media summarization failed');
+      }
+    } catch (e) {
+      _showSnackBar('Media summarization failed: $e', Colors.red);
+    } finally {
+      if (mounted) {
+        setState(() => _isSummarizing = false);
+      }
+    }
+  }
+
+  Future<void> _summarizeYouTubeUrl() async {
+    final url = _urlController.text.trim();
+    if (url.isEmpty) {
+      _showSnackBar('Please enter a YouTube URL', Colors.orange);
+      return;
+    }
+
+    setState(() => _isSummarizing = true);
+
+    try {
+      final response = await http.post(
+        Uri.parse(AppConstants.videoSummarize),
+        body: {
+          'youtube_url': url,
+          'source_language': _sourceLanguage,
+        },
+      );
+
+      final data = jsonDecode(response.body);
+
+      if (response.statusCode == 200) {
+        setState(() {
+          _originalTranscript = '';
+          _summaryText = data['summary_text'] ?? '';
+          _summaryLanguageName = data['detected_language_name'] ?? '';
+          _isSummarizing = false;
+        });
+
+        _showSnackBar('Summary complete!', Colors.orange);
+      } else {
+        throw Exception(data['error'] ?? 'YouTube summarization failed');
+      }
+    } catch (e) {
+      setState(() => _isSummarizing = false);
+      _showSnackBar('YouTube summarization failed: $e', Colors.red);
+    }
+  }
+
+  Future<void> _runSummarize() async {
+    if (_selectedMediaFile != null || _selectedMediaBytes != null) {
+      await _summarizeMedia(
+        file: _selectedMediaFile,
+        bytes: _selectedMediaBytes,
+        filename: _selectedMediaFileName,
+      );
+    } else if (_videoSource == 'youtube' && _urlController.text.trim().isNotEmpty) {
+      await _summarizeYouTubeUrl();
+    } else if (_selectedMediaFile == null && _selectedMediaBytes == null && _videoSource != 'youtube') {
+      _showSnackBar('Please select a video file or record a video first.', Colors.orange);
+    } else {
+      _showSnackBar('Please enter a YouTube URL or select a video first.', Colors.orange);
     }
   }
 
@@ -397,15 +679,25 @@ class _VideoTranslationScreenState extends State<VideoTranslationScreen> with Si
   }
 
   void _clearAll() {
+    _liveTranslationRunId++;
+    _liveTranslationSubscription?.cancel();
+    _youtubeController?.removeListener(_syncLiveSubtitleToPlayback);
     setState(() {
       _urlController.clear();
       _selectedMediaFile = null;
+      _selectedMediaBytes = null;
+      _selectedMediaFileName = null;
       _videoController?.dispose();
       _chewieController?.dispose();
+      _youtubeController = null;
       _videoController = null;
       _chewieController = null;
       _originalTranscript = '';
       _translatedText = '';
+      _summaryText = '';
+      _summaryLanguageName = '';
+      _liveSubtitleText = '';
+      _liveStatus = '';
       _subtitles.clear();
       _mediaType = null;
     });
@@ -422,39 +714,12 @@ class _VideoTranslationScreenState extends State<VideoTranslationScreen> with Si
     );
   }
 
-  Widget _buildYouTubeEmbed(String videoId) {
-    return Container(
-      height: 250,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(12),
-        color: Colors.black,
-      ),
-      child: const Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.play_circle_fill, size: 64, color: Colors.white),
-            SizedBox(height: 8),
-            Text(
-              'YouTube Player',
-              style: TextStyle(color: Colors.white),
-            ),
-            SizedBox(height: 4),
-            Text(
-              '(Web version would embed here)',
-              style: TextStyle(color: Colors.white70, fontSize: 12),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Video & Audio Translation'),
+        title: const Text('Video Translation'),
         elevation: 0,
         backgroundColor: Colors.blue,
         foregroundColor: Colors.white,
@@ -472,68 +737,57 @@ class _VideoTranslationScreenState extends State<VideoTranslationScreen> with Si
             child: Row(
               children: [
                 Expanded(
-                  child: ChoiceChip(
-                    label: const Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.link, size: 16),
-                        SizedBox(width: 4),
-                        Text('YouTube'),
-                      ],
+                  child: MouseRegion(
+                    onEnter: (_) => setState(() => _hoverYouTube = true),
+                    onExit: (_) => setState(() => _hoverYouTube = false),
+                    child: ChoiceChip(
+                      label: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Icon(Icons.link, size: 16),
+                          const SizedBox(width: 4),
+                          const Text('YouTube', style: TextStyle(color: Colors.blue)),
+                        ],
+                      ),
+                      selected: _videoSource == 'youtube',
+                      onSelected: (selected) {
+                        if (selected) _setVideoSource('youtube');
+                      },
+                      selectedColor: Colors.white,
+                      backgroundColor: _hoverYouTube
+                          ? Colors.lightBlue.shade50
+                          : Colors.white.withOpacity(0.2),
+                      labelStyle: const TextStyle(color: Colors.white),
                     ),
-                    selected: _videoSource == 'youtube',
-                    onSelected: (selected) {
-                      if (selected) _setVideoSource('youtube');
-                    },
-                    selectedColor: Colors.white,
-                    backgroundColor: Colors.white.withOpacity(0.2),
-                    labelStyle: const TextStyle(color: Colors.white),
                   ),
                 ),
                 const SizedBox(width: 8),
                 Expanded(
-                  child: ChoiceChip(
-                    label: const Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.video_file, size: 16),
-                        SizedBox(width: 4),
-                        Text('Video'),
-                      ],
+                  child: MouseRegion(
+                    onEnter: (_) => setState(() => _hoverVideo = true),
+                    onExit: (_) => setState(() => _hoverVideo = false),
+                    child: ChoiceChip(
+                      label: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Icon(Icons.video_file, size: 16),
+                          const SizedBox(width: 4),
+                          const Text('Video', style: TextStyle(color: Colors.blue)),
+                        ],
+                      ),
+                      selected: _mediaType == 'video',
+                      onSelected: (selected) {
+                        if (selected) {
+                          _setVideoSource('file');
+                          _pickVideoFile();
+                        }
+                      },
+                      selectedColor: Colors.white,
+                      backgroundColor: _hoverVideo
+                          ? Colors.lightBlue.shade50
+                          : Colors.white.withOpacity(0.2),
+                      labelStyle: const TextStyle(color: Colors.white),
                     ),
-                    selected: _mediaType == 'video',
-                    onSelected: (selected) {
-                      if (selected) {
-                        _setVideoSource('file');
-                        _pickVideoFile();
-                      }
-                    },
-                    selectedColor: Colors.white,
-                    backgroundColor: Colors.white.withOpacity(0.2),
-                    labelStyle: const TextStyle(color: Colors.white),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: ChoiceChip(
-                    label: const Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.audio_file, size: 16),
-                        SizedBox(width: 4),
-                        Text('Audio'),
-                      ],
-                    ),
-                    selected: _mediaType == 'audio',
-                    onSelected: (selected) {
-                      if (selected) {
-                        _setVideoSource('file');
-                        _pickAudioFile();
-                      }
-                    },
-                    selectedColor: Colors.white,
-                    backgroundColor: Colors.white.withOpacity(0.2),
-                    labelStyle: const TextStyle(color: Colors.white),
                   ),
                 ),
               ],
@@ -557,8 +811,7 @@ class _VideoTranslationScreenState extends State<VideoTranslationScreen> with Si
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      _videoSource == 'youtube' ? 'YouTube URL' : 
-                      _mediaType == 'audio' ? 'Audio File Selected' : 'Video File',
+                      _videoSource == 'youtube' ? 'YouTube URL' : 'Video File',
                       style: const TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
@@ -577,39 +830,9 @@ class _VideoTranslationScreenState extends State<VideoTranslationScreen> with Si
                           ),
                         ),
                       )
-                    else if (_selectedMediaFile == null)
+                    else if (_selectedMediaFile == null && _selectedMediaBytes == null)
                       InkWell(
-                        onTap: () {
-                          showModalBottomSheet(
-                            context: context,
-                            builder: (context) => Container(
-                              padding: const EdgeInsets.all(20),
-                              child: Column(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  ListTile(
-                                    leading: const Icon(Icons.video_file, color: Colors.blue),
-                                    title: const Text('Select Video File'),
-                                    subtitle: const Text('MP4, MOV, AVI, MKV'),
-                                    onTap: () {
-                                      Navigator.pop(context);
-                                      _pickVideoFile();
-                                    },
-                                  ),
-                                  ListTile(
-                                    leading: const Icon(Icons.audio_file, color: Colors.green),
-                                    title: const Text('Select Audio File'),
-                                    subtitle: const Text('MP3, WAV, M4A, AAC'),
-                                    onTap: () {
-                                      Navigator.pop(context);
-                                      _pickAudioFile();
-                                    },
-                                  ),
-                                ],
-                              ),
-                            ),
-                          );
-                        },
+                        onTap: _showVideoSourcePicker,
                         child: Container(
                           padding: const EdgeInsets.all(20),
                           decoration: BoxDecoration(
@@ -618,10 +841,10 @@ class _VideoTranslationScreenState extends State<VideoTranslationScreen> with Si
                           ),
                           child: Column(
                             children: [
-                              const Icon(Icons.upload_file, size: 48, color: Colors.grey),
+                              const Icon(Icons.video_call, size: 48, color: Colors.blue),
                               const SizedBox(height: 8),
                               Text(
-                                'Tap to select a file',
+                                'Tap to select a video file or record video',
                                 textAlign: TextAlign.center,
                                 style: TextStyle(color: Colors.grey.shade600),
                               ),
@@ -639,8 +862,8 @@ class _VideoTranslationScreenState extends State<VideoTranslationScreen> with Si
                         ),
                         child: Row(
                           children: [
-                            Icon(
-                              _mediaType == 'audio' ? Icons.audio_file : Icons.video_file,
+                            const Icon(
+                              Icons.video_file,
                               color: Colors.green,
                               size: 32,
                             ),
@@ -650,7 +873,7 @@ class _VideoTranslationScreenState extends State<VideoTranslationScreen> with Si
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
-                                    _selectedMediaFile!.path.split('/').last,
+                                    _selectedMediaFileName ?? p.basename(_selectedMediaFile!.path),
                                     style: const TextStyle(
                                       fontWeight: FontWeight.bold,
                                     ),
@@ -658,7 +881,9 @@ class _VideoTranslationScreenState extends State<VideoTranslationScreen> with Si
                                     overflow: TextOverflow.ellipsis,
                                   ),
                                   Text(
-                                    '${(_selectedMediaFile!.lengthSync() / 1024 / 1024).toStringAsFixed(1)} MB',
+                                    _selectedMediaFile != null
+                                        ? '${(_selectedMediaFile!.lengthSync() / 1024 / 1024).toStringAsFixed(1)} MB'
+                                        : '${(_selectedMediaBytes!.length / 1024 / 1024).toStringAsFixed(1)} MB',
                                     style: const TextStyle(color: Colors.grey),
                                   ),
                                 ],
@@ -677,8 +902,29 @@ class _VideoTranslationScreenState extends State<VideoTranslationScreen> with Si
                     SizedBox(
                       width: double.infinity,
                       height: 50,
-                      child: ElevatedButton(
-                        onPressed: _isLoading ? null : _loadVideo,
+                      child: ElevatedButton.icon(
+                        onPressed: _isLoading || _isTranslating || _isSummarizing ? null : () async {
+                          if (_selectedMediaFile != null || _selectedMediaBytes != null) {
+                            await _uploadMedia(file: _selectedMediaFile, bytes: _selectedMediaBytes, filename: _selectedMediaFileName);
+                          } else if (_videoSource == 'youtube' && _urlController.text.trim().isNotEmpty) {
+                            await _translateYouTubeUrl();
+                          } else if (_selectedMediaFile == null && _selectedMediaBytes == null && _videoSource != 'youtube') {
+                            _showSnackBar('Please select a video file or record a video first.', Colors.orange);
+                          } else {
+                            _showSnackBar('Please enter a YouTube URL or select a video first.', Colors.orange);
+                          }
+                        },
+                        icon: _isTranslating
+                            ? const SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(
+                                  color: Colors.white,
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : const Icon(Icons.translate),
+                        label: Text(_isTranslating ? 'Translating...' : 'Translate'),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: Colors.blue,
                           foregroundColor: Colors.white,
@@ -686,25 +932,50 @@ class _VideoTranslationScreenState extends State<VideoTranslationScreen> with Si
                             borderRadius: BorderRadius.circular(12),
                           ),
                         ),
-                        child: _isLoading
-                            ? const Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  SizedBox(
-                                    width: 20,
-                                    height: 20,
-                                    child: CircularProgressIndicator(
-                                      color: Colors.white,
-                                      strokeWidth: 2,
-                                    ),
-                                  ),
-                                  SizedBox(width: 12),
-                                  Text('Processing...'),
-                                ],
-                              )
-                            : Text(_selectedMediaFile != null ? 'Process Media' : 'Load Media'),
                       ),
                     ),
+
+                    const SizedBox(height: 8),
+
+                    // Source & Target selectors
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: DropdownButtonFormField<String>(
+                            value: _sourceLanguage,
+                            decoration: InputDecoration(
+                              labelText: 'Source language',
+                              filled: true,
+                              fillColor: Colors.white,
+                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                            ),
+                            items: [
+                              const DropdownMenuItem(value: 'auto', child: Text('Auto')),
+                              ..._languages.map((l) => DropdownMenuItem(value: l['code'], child: Text(l['name']!))).toList(),
+                            ],
+                            onChanged: (v) => setState(() => _sourceLanguage = v ?? 'auto'),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: DropdownButtonFormField<String>(
+                            value: _targetLanguage,
+                            decoration: InputDecoration(
+                              labelText: 'Target language',
+                              filled: true,
+                              fillColor: Colors.white,
+                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                            ),
+                            items: _languages.map((l) => DropdownMenuItem(value: l['code'], child: Text(l['name']!))).toList(),
+                                                    onChanged: (v) {
+                              setState(() => _targetLanguage = v ?? 'en');
+                            },
+                          ),
+                        ),
+                      ],
+                    ),
+
                   ],
                 ),
               ),
@@ -740,161 +1011,91 @@ class _VideoTranslationScreenState extends State<VideoTranslationScreen> with Si
                   borderRadius: BorderRadius.circular(12),
                   color: Colors.black,
                 ),
-                child: Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: Stack(
                     children: [
-                      const Icon(Icons.play_circle_fill, size: 64, color: Colors.white),
-                      const SizedBox(height: 8),
-                      Text(
-                        'YouTube: ${_urlController.text}',
-                        style: const TextStyle(color: Colors.white),
-                        textAlign: TextAlign.center,
+                      Positioned.fill(
+                        child: OmniVideoPlayer(
+                          configuration: VideoPlayerConfiguration(
+                            videoSourceConfiguration:
+                                VideoSourceConfiguration.youtube(
+                              videoUrl: Uri.parse(_urlController.text.trim()),
+                            ),
+                          ),
+                          callbacks: VideoPlayerCallbacks(
+                            onControllerCreated: (controller) {
+                              _attachYouTubeController(controller);
+                              controller.play();
+                            },
+                            onSeekEnd: (_) => _syncLiveSubtitleToPlayback(),
+                          ),
+                        ),
                       ),
-                      const SizedBox(height: 4),
-                      const Text(
-                        '(Web version supports embedded YouTube)',
-                        style: TextStyle(color: Colors.white70, fontSize: 12),
-                      ),
+                      if (_liveSubtitleText.isNotEmpty)
+                        Positioned(
+                          left: 12,
+                          right: 12,
+                          bottom: 22,
+                          child: IgnorePointer(
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 8,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Colors.black.withOpacity(0.72),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Text(
+                                _liveSubtitleText,
+                                textAlign: TextAlign.center,
+                                maxLines: 3,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
                     ],
                   ),
                 ),
               ),
 
-            const SizedBox(height: 16),
-
-            if (_isTranscribing)
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.blue.shade50,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.blue.shade200),
-                ),
+            if (_liveStatus.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 10),
                 child: Row(
                   children: [
-                    AnimatedBuilder(
-                      animation: _animationController,
-                      builder: (context, child) {
-                        return Container(
-                          width: 20 + (_animationController.value * 20),
-                          height: 20 + (_animationController.value * 20),
-                          decoration: const BoxDecoration(
-                            color: Colors.blue,
-                            shape: BoxShape.circle,
-                          ),
-                        );
-                      },
-                    ),
-                    const SizedBox(width: 16),
-                    const Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Transcribing Audio...',
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 16,
-                            ),
-                          ),
-                          SizedBox(height: 4),
-                          Text(
-                            'Converting speech to text',
-                            style: TextStyle(color: Colors.grey),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-
-            if (_originalTranscript.isNotEmpty || _isTranscribing)
-              Container(
-                margin: const EdgeInsets.only(top: 16),
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.grey.shade50,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Translate to:',
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    Row(
-                      children: _languages.map((lang) {
-                        bool isSelected = _targetLanguage == lang['code'];
-                        return Expanded(
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 4),
-                            child: FilterChip(
-                              label: Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Text(lang['flag']!),
-                                  const SizedBox(width: 4),
-                                  Text(lang['name']!),
-                                ],
-                              ),
-                              selected: isSelected,
-                              onSelected: (selected) {
-                                setState(() {
-                                  _targetLanguage = lang['code']!;
-                                  _initTTS();
-                                });
-                              },
-                              backgroundColor: Colors.grey.shade200,
-                              selectedColor: Colors.blue.shade100,
-                              checkmarkColor: Colors.blue,
-                            ),
-                          ),
-                        );
-                      }).toList(),
-                    ),
-                    
-                    if (_originalTranscript.isNotEmpty && !_isTranscribing) ...[
-                      const SizedBox(height: 16),
-                      SizedBox(
-                        width: double.infinity,
-                        height: 50,
-                        child: ElevatedButton.icon(
-                          onPressed: _isTranslating ? null : _translateText,
-                          icon: _isTranslating
-                              ? const SizedBox(
-                                  width: 20,
-                                  height: 20,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                    color: Colors.white,
-                                  ),
-                                )
-                              : const Icon(Icons.translate),
-                          label: Text(
-                            _isTranslating ? 'Translating...' : 'Translate & Generate Voice',
-                          ),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.green,
-                            foregroundColor: Colors.white,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                          ),
+                    if (_isTranslating)
+                      const SizedBox(
+                        width: 14,
+                        height: 14,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    else
+                      const Icon(Icons.subtitles, size: 16, color: Colors.blue),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        _liveStatus,
+                        style: TextStyle(
+                          color: Colors.grey.shade700,
+                          fontSize: 13,
                         ),
                       ),
-                    ],
+                    ),
                   ],
                 ),
               ),
 
-            if (_originalTranscript.isNotEmpty)
+            const SizedBox(height: 16),
+
+            if (_originalTranscript.isNotEmpty && _summaryText.isEmpty)
               Container(
                 margin: const EdgeInsets.only(top: 16),
                 padding: const EdgeInsets.all(16),
@@ -914,6 +1115,44 @@ class _VideoTranslationScreenState extends State<VideoTranslationScreen> with Si
                     ),
                     const SizedBox(height: 8),
                     Text(_originalTranscript),
+                  ],
+                ),
+              ),
+
+            if (_summaryText.isNotEmpty)
+              Container(
+                margin: const EdgeInsets.only(top: 16),
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.orange.shade50,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.orange.shade200),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(Icons.summarize, color: Colors.orange),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            _summaryLanguageName.isNotEmpty
+                                ? 'Summary ($_summaryLanguageName):'
+                                : 'Summary:',
+                            style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 16,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      _summaryText,
+                      style: const TextStyle(fontSize: 16),
+                    ),
                   ],
                 ),
               ),
@@ -940,14 +1179,6 @@ class _VideoTranslationScreenState extends State<VideoTranslationScreen> with Si
                             fontWeight: FontWeight.bold,
                             fontSize: 16,
                           ),
-                        ),
-                        const Spacer(),
-                        IconButton(
-                          icon: Icon(
-                            _isPlayingTranslated ? Icons.stop : Icons.volume_up,
-                            color: Colors.blue,
-                          ),
-                          onPressed: _toggleAudioPlayback,
                         ),
                       ],
                     ),
@@ -1061,13 +1292,7 @@ class _VideoTranslationScreenState extends State<VideoTranslationScreen> with Si
                           icon: Icons.summarize,
                           label: 'Summarize',
                           color: Colors.orange,
-                          onTap: () {
-                            if (_translatedText.isNotEmpty) {
-                              _showSnackBar('Summary: ${_translatedText.substring(0, min(50, _translatedText.length))}...', Colors.orange);
-                            } else {
-                              _showSnackBar('Translate first', Colors.orange);
-                            }
-                          },
+                          onTap: _isLoading || _isTranslating || _isSummarizing ? null : _runSummarize,
                         ),
                       ),
                       const SizedBox(width: 12),
@@ -1130,8 +1355,10 @@ class _VideoTranslationScreenState extends State<VideoTranslationScreen> with Si
     required IconData icon,
     required String label,
     required Color color,
-    required VoidCallback onTap,
+    required VoidCallback? onTap,
   }) {
+    final effectiveColor = onTap == null ? Colors.grey : color;
+
     return Card(
       elevation: 2,
       shape: RoundedRectangleBorder(
@@ -1144,19 +1371,180 @@ class _VideoTranslationScreenState extends State<VideoTranslationScreen> with Si
           padding: const EdgeInsets.all(16),
           child: Column(
             children: [
-              Icon(icon, size: 28, color: color),
+              Icon(icon, size: 28, color: effectiveColor),
               const SizedBox(height: 8),
               Text(
                 label,
                 style: TextStyle(
                   fontSize: 12,
-                  color: color,
+                  color: effectiveColor,
                   fontWeight: FontWeight.w500,
                 ),
               ),
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _VideoRecorderScreen extends StatefulWidget {
+  const _VideoRecorderScreen();
+
+  @override
+  State<_VideoRecorderScreen> createState() => _VideoRecorderScreenState();
+}
+
+class _VideoRecorderScreenState extends State<_VideoRecorderScreen> {
+  CameraController? _controller;
+  Future<void>? _initializeCameraFuture;
+  bool _isRecording = false;
+  String? _errorMessage;
+
+  @override
+  void initState() {
+    super.initState();
+    _initializeCameraFuture = _initializeCamera();
+  }
+
+  @override
+  void dispose() {
+    _controller?.dispose();
+    super.dispose();
+  }
+
+  Future<void> _initializeCamera() async {
+    try {
+      final cameras = await availableCameras();
+      if (cameras.isEmpty) {
+        throw Exception('No camera was found on this device.');
+      }
+
+      final camera = cameras.firstWhere(
+        (camera) => camera.lensDirection == CameraLensDirection.back,
+        orElse: () => cameras.first,
+      );
+      final controller = CameraController(
+        camera,
+        ResolutionPreset.medium,
+        enableAudio: true,
+      );
+
+      await controller.initialize();
+
+      if (!mounted) {
+        await controller.dispose();
+        return;
+      }
+
+      setState(() {
+        _controller = controller;
+      });
+    } catch (e) {
+      setState(() {
+        _errorMessage = 'Unable to open camera: $e';
+      });
+    }
+  }
+
+  Future<void> _toggleRecording() async {
+    final controller = _controller;
+    if (controller == null || !controller.value.isInitialized) {
+      return;
+    }
+
+    try {
+      if (_isRecording) {
+        final video = await controller.stopVideoRecording();
+        if (!mounted) return;
+        Navigator.of(context).pop(video);
+        return;
+      }
+
+      await controller.startVideoRecording();
+      if (!mounted) return;
+      setState(() {
+        _isRecording = true;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _errorMessage = 'Recording failed: $e';
+        _isRecording = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      appBar: AppBar(
+        title: const Text('Record Video'),
+        backgroundColor: Colors.black,
+        foregroundColor: Colors.white,
+      ),
+      body: FutureBuilder<void>(
+        future: _initializeCameraFuture,
+        builder: (context, snapshot) {
+          if (_errorMessage != null) {
+            return Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Text(
+                  _errorMessage!,
+                  style: const TextStyle(color: Colors.white),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+            );
+          }
+
+          final controller = _controller;
+          if (snapshot.connectionState != ConnectionState.done ||
+              controller == null ||
+              !controller.value.isInitialized) {
+            return const Center(
+              child: CircularProgressIndicator(color: Colors.white),
+            );
+          }
+
+          return Stack(
+            children: [
+              Positioned.fill(
+                child: FittedBox(
+                  fit: BoxFit.cover,
+                  child: SizedBox(
+                    width: controller.value.previewSize!.height,
+                    height: controller.value.previewSize!.width,
+                    child: CameraPreview(controller),
+                  ),
+                ),
+              ),
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: 32,
+                child: Center(
+                  child: ElevatedButton.icon(
+                    onPressed: _toggleRecording,
+                    icon: Icon(_isRecording ? Icons.stop : Icons.fiber_manual_record),
+                    label: Text(_isRecording ? 'Stop Recording' : 'Start Recording'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: _isRecording ? Colors.red : Colors.white,
+                      foregroundColor: _isRecording ? Colors.white : Colors.red,
+                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(30),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          );
+        },
       ),
     );
   }

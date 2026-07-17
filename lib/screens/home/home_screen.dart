@@ -108,22 +108,35 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   // MARK: - Body
-  Container _buildBody() {
-    return Container(
-      decoration: _buildBodyGradient(),
-      child: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(23.0),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              _buildIconCircle(),
-              const SizedBox(height: 30),
-              _buildContentCard(),
-            ],
+  Widget _buildBody() {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return Container(
+          decoration: _buildBodyGradient(),
+          child: SafeArea(
+            child: Center(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 24.0),
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      _buildIconCircle(),
+                      const SizedBox(height: 20),
+                      ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 480),
+                        child: _buildContentCard(),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 
@@ -162,7 +175,8 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Container _buildContentCard() {
     return Container(
-      padding: const EdgeInsets.all(30),
+      width: double.infinity,
+      padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
         color: Colors.white.withOpacity(0.95),
         borderRadius: BorderRadius.circular(20),
@@ -175,13 +189,14 @@ class _HomeScreenState extends State<HomeScreen> {
         ],
       ),
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
           _buildTitle(),
           const SizedBox(height: 10),
           _buildLanguages(),
-          const SizedBox(height: 40),
+          const SizedBox(height: 24),
           _buildStartButton(),
-          const SizedBox(height: 20),
+          const SizedBox(height: 16),
           _buildTagline(),
         ],
       ),
@@ -191,8 +206,9 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _buildTitle() {
     return const Text(
       'Translation Platform',
+      textAlign: TextAlign.center,
       style: TextStyle(
-        fontSize: 32,
+        fontSize: 28,
         fontWeight: FontWeight.bold,
         color: _blueColor,
       ),
@@ -202,8 +218,9 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _buildLanguages() {
     return const Text(
       'Kinyarwanda • English • French',
+      textAlign: TextAlign.center,
       style: TextStyle(
-        fontSize: 18,
+        fontSize: 16,
         color: _greenColor,
       ),
     );
@@ -215,21 +232,22 @@ class _HomeScreenState extends State<HomeScreen> {
       style: ElevatedButton.styleFrom(
         backgroundColor: _blueColor,
         foregroundColor: Colors.white,
-        padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 15),
+        padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 14),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
         elevation: 5,
       ),
-      child: const Text('Start Translating', style: TextStyle(fontSize: 18)),
+      child: const Text('Start Translating', style: TextStyle(fontSize: 16)),
     );
   }
 
   Widget _buildTagline() {
     return const Text(
       'For Driver\'s, Tourists, Students, and Everyone!',
+      textAlign: TextAlign.center,
       style: TextStyle(
         color: _yellowColor,
         fontWeight: FontWeight.w500,
-        fontSize: 14,
+        fontSize: 13,
       ),
     );
   }
