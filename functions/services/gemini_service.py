@@ -143,12 +143,12 @@ def _get_whisper_model():
     if _whisper_model is not None:
         return _whisper_model
 
-    default_size = os.getenv("WHISPER_MODEL_SIZE", "small")
+    default_size = (os.getenv("WHISPER_MODEL_SIZE", "tiny") or "tiny").strip().lower()
     device = os.getenv("WHISPER_DEVICE", "cpu")
     compute_type = os.getenv("WHISPER_COMPUTE_TYPE", "int8")
 
     candidate_sizes = [default_size]
-    for fallback in ["small", "tiny"]:
+    for fallback in ["tiny", "base", "small"]:
         if fallback not in candidate_sizes:
             candidate_sizes.append(fallback)
 
@@ -184,7 +184,7 @@ def _transcribe_with_whisper(video_path, source_lang, model=None):
     segments, info = whisper_model.transcribe(
         video_path,
         language=normalized_source,
-        vad_filter=True
+        vad_filter=False
     )
     raw_transcript = " ".join(segment.text.strip() for segment in segments).strip()
     if not raw_transcript:
@@ -294,7 +294,41 @@ def translate_video(video_path, source_lang, target_lang, model=None):
         raise
 
 
-def _stream_remote_url_in_chunks(stream_url, source_lang, target_lang, model=None, chunk_seconds=12):
+def _split_audio_for_transcription(audio_path, base_start_seconds=0.0, max_duration_seconds=2.0):
+    """Split larger audio chunks into smaller windows so Whisper stays within memory limits."""
+    if not audio_path or not os.path.exists(audio_path):
+        return []
+
+    try:
+        audio_segment = AudioSegment.from_file(audio_path)
+    except Exception:
+        return [(audio_path, base_start_seconds, base_start_seconds + max_duration_seconds)]
+
+    duration_ms = len(audio_segment)
+    max_duration_ms = int(max_duration_seconds * 1000)
+    if duration_ms <= max_duration_ms:
+        return [(audio_path, base_start_seconds, base_start_seconds + (duration_ms / 1000.0))]
+
+    chunk_paths = []
+    for start_ms in range(0, duration_ms, max_duration_ms):
+        end_ms = min(start_ms + max_duration_ms, duration_ms)
+        sub_segment = audio_segment[start_ms:end_ms]
+        if len(sub_segment) < 200:
+            continue
+
+        fd, temp_path = tempfile.mkstemp(suffix=".wav")
+        os.close(fd)
+        sub_segment.export(temp_path, format="wav")
+        chunk_paths.append((
+            temp_path,
+            base_start_seconds + (start_ms / 1000.0),
+            base_start_seconds + (end_ms / 1000.0),
+        ))
+
+    return chunk_paths or [(audio_path, base_start_seconds, base_start_seconds + (duration_ms / 1000.0))]
+
+
+def _stream_remote_url_in_chunks(stream_url, source_lang, target_lang, model=None, chunk_seconds=2):
     """
     Use ffmpeg to segment a remote audio/video stream into short WAV chunks
     and transcribe/translate each chunk sequentially to preserve streaming.
@@ -345,8 +379,9 @@ def _stream_remote_url_in_chunks(stream_url, source_lang, target_lang, model=Non
 
         processed = set()
         index = 0
+        output_index = 0
         start_time = time.time()
-        timeout_seconds = 30  # Give ffmpeg 30 seconds to connect and produce chunks
+        timeout_seconds = 15  # Give ffmpeg a shorter window to connect and produce chunks
         last_chunk_time = start_time
         
         # Loop until ffmpeg exits and no new files remain
@@ -403,52 +438,51 @@ def _stream_remote_url_in_chunks(stream_url, source_lang, target_lang, model=Non
 
                 print(f"[_stream_remote_url_in_chunks] Processing chunk {index}: {os.path.basename(f)}", file=sys.stderr)
 
-                # Transcribe the chunk (may use whisper or SR fallback)
-                try:
-                    transcript, detected_language = transcribe_video(f, source_lang, model)
-                    if not transcript or not transcript.strip():
-                        print(f"[_stream_remote_url_in_chunks] Chunk {index} had no speech, skipping", file=sys.stderr)
-                        processed.add(f)
-                        try:
-                            os.remove(f)
-                        except Exception:
-                            pass
-                        continue
-                except Exception as e:
-                    print(f"[_stream_remote_url_in_chunks] Transcription failed for chunk {index}: {e}", file=sys.stderr)
-                    yield {"type": "error", "message": "Transcription failed", "error": str(e)}
-                    processed.add(f)
+                chunk_inputs = _split_audio_for_transcription(
+                    f,
+                    base_start_seconds=index * chunk_seconds,
+                    max_duration_seconds=min(chunk_seconds, 2.0)
+                )
+
+                for chunk_path, chunk_start, chunk_end in chunk_inputs:
                     try:
-                        os.remove(f)
+                        transcript, detected_language = transcribe_video(chunk_path, source_lang, model)
+                        if not transcript or not transcript.strip():
+                            print(f"[_stream_remote_url_in_chunks] Chunk {index} had no speech, skipping", file=sys.stderr)
+                            continue
+                    except Exception as e:
+                        print(f"[_stream_remote_url_in_chunks] Transcription failed for chunk {index}: {e}", file=sys.stderr)
+                        yield {"type": "error", "message": "Transcription failed", "error": str(e), "fallback_needed": True}
+                        continue
+
+                    try:
+                        translated_text, _ = _translate_texts_with_model([transcript], target_lang, model)
+                        translated_text = translated_text[0] if isinstance(translated_text, list) else translated_text
+                    except Exception as e:
+                        print(f"[_stream_remote_url_in_chunks] Translation failed for chunk {index}: {e}", file=sys.stderr)
+                        translated_text = f"[translation unavailable: {e}]"
+
+                    print(f"[_stream_remote_url_in_chunks] Yielding segment {output_index}: {transcript[:50]}... -> {translated_text[:50]}...", file=sys.stderr)
+
+                    yield {
+                        "type": "segment",
+                        "index": output_index,
+                        "start": float(chunk_start),
+                        "end": float(chunk_end),
+                        "original": transcript,
+                        "translated": translated_text,
+                        "detected_language": detected_language,
+                        "detected_language_name": get_language_name(detected_language),
+                        "target_language": target_lang,
+                        "model": model
+                    }
+                    output_index += 1
+
+                    try:
+                        if chunk_path != f and os.path.exists(chunk_path):
+                            os.remove(chunk_path)
                     except Exception:
                         pass
-                    continue
-
-                # Translate transcript
-                try:
-                    translated_text, _ = _translate_texts_with_model([transcript], target_lang, model)
-                    translated_text = translated_text[0] if isinstance(translated_text, list) else translated_text
-                except Exception as e:
-                    print(f"[_stream_remote_url_in_chunks] Translation failed for chunk {index}: {e}", file=sys.stderr)
-                    translated_text = f"[translation unavailable: {e}]"
-
-                start_time_val = index * chunk_seconds
-                end_time_val = start_time_val + chunk_seconds
-
-                print(f"[_stream_remote_url_in_chunks] Yielding segment {index}: {transcript[:50]}... -> {translated_text[:50]}...", file=sys.stderr)
-
-                yield {
-                    "type": "segment",
-                    "index": index,
-                    "start": float(start_time_val),
-                    "end": float(end_time_val),
-                    "original": transcript,
-                    "translated": translated_text,
-                    "detected_language": detected_language,
-                    "detected_language_name": get_language_name(detected_language),
-                    "target_language": target_lang,
-                    "model": model
-                }
 
                 processed.add(f)
                 last_chunk_time = current_time  # Update last chunk time
@@ -530,7 +564,7 @@ def stream_translated_video_segments(video_path, source_lang, target_lang, model
             segments_gen, info = whisper_model.transcribe(
                 video_path,
                 language=normalized_source,
-                vad_filter=True,
+                vad_filter=False,
                 word_timestamps=False
             )
             # Convert generator to list to catch errors early
@@ -555,7 +589,7 @@ def stream_translated_video_segments(video_path, source_lang, target_lang, model
                             segments_gen, info = tmp_model.transcribe(
                                 video_path,
                                 language=normalized_source,
-                                vad_filter=True,
+                                vad_filter=False,
                                 word_timestamps=False
                             )
                             segments = list(segments_gen)
@@ -570,6 +604,20 @@ def stream_translated_video_segments(video_path, source_lang, target_lang, model
                                 pass
                     except Exception as e2:
                         print(f"[stream_translated_video_segments] fallback size {size} failed: {e2}", file=sys.stderr)
+                        traceback.print_exc()
+
+                if segments is None or len(segments) == 0:
+                    try:
+                        print("[stream_translated_video_segments] retrying without VAD using the current model", file=sys.stderr)
+                        segments_gen, info = whisper_model.transcribe(
+                            video_path,
+                            language=normalized_source,
+                            word_timestamps=False
+                        )
+                        segments = list(segments_gen)
+                        print(f"[stream_translated_video_segments] No-VAD fallback succeeded, got {len(segments)} segments", file=sys.stderr)
+                    except Exception as e3:
+                        print(f"[stream_translated_video_segments] no-VAD fallback failed: {e3}", file=sys.stderr)
                         traceback.print_exc()
 
             # If still no segments, yield an error and stop

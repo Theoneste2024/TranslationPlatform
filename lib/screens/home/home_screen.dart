@@ -1,16 +1,16 @@
 import 'package:flutter/material.dart';
-import '../translation/text_translation_screen.dart';
-import '../translation/real_time_speech_screen.dart';
-import '../translation/video_translation_screen.dart';
-import '../translation/camera_translation_screen.dart';
-import '../translation/offline_packs_screen.dart';
-import '../education/lecture_summarizer_screen.dart';
-import '../translation/motorist_mode_screen.dart';
-import '../maps/google_maps_screen.dart';
-import '../settings/settings_screen.dart';
+import '../education/lecture_summarizer_screen.dart' deferred as lecture;
+import '../maps/google_maps_screen.dart' deferred as maps;
+import '../settings/settings_screen.dart' deferred as settings;
+import '../translation/camera_translation_screen.dart' deferred as camera;
+import '../translation/motorist_mode_screen.dart' deferred as motorist;
+import '../translation/offline_packs_screen.dart' deferred as offline;
+import '../translation/real_time_speech_screen.dart' deferred as speech;
+import '../translation/text_translation_screen.dart' deferred as text;
+import '../translation/video_translation_screen.dart' deferred as video;
 
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({Key? key}) : super(key: key);
+  const HomeScreen({super.key});
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -18,7 +18,6 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   // Color constants for easy maintenance
-  static const Color primaryColor = Color(0xFF003D82); // Dark Sky Blue
   static const Color _blueColor = Color(0xFF003D82); // Dark Sky Blue
   static const Color _greenColor = Color(0xFF003D82); // Dark Sky Blue
   static const Color _yellowColor = Color(0xFF003D82); // Dark Sky Blue
@@ -116,7 +115,8 @@ class _HomeScreenState extends State<HomeScreen> {
           child: SafeArea(
             child: Center(
               child: SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 24.0),
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 16.0, vertical: 24.0),
                 child: ConstrainedBox(
                   constraints: BoxConstraints(minHeight: constraints.maxHeight),
                   child: Column(
@@ -155,11 +155,11 @@ class _HomeScreenState extends State<HomeScreen> {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.95),
+        color: Colors.white.withValues(alpha: 0.95),
         shape: BoxShape.circle,
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.1),
+            color: Colors.black.withValues(alpha: 0.1),
             blurRadius: 20,
             spreadRadius: 5,
           ),
@@ -178,11 +178,11 @@ class _HomeScreenState extends State<HomeScreen> {
       width: double.infinity,
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.95),
+        color: Colors.white.withValues(alpha: 0.95),
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.1),
+            color: Colors.black.withValues(alpha: 0.1),
             blurRadius: 20,
             spreadRadius: 5,
           ),
@@ -228,7 +228,10 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _buildStartButton() {
     return ElevatedButton(
-      onPressed: () => _navigateTo(const TextTranslationScreen()),
+      onPressed: () => _navigateToDeferred(
+        loadLibrary: text.loadLibrary,
+        screenBuilder: () => text.TextTranslationScreen(),
+      ),
       style: ElevatedButton.styleFrom(
         backgroundColor: _blueColor,
         foregroundColor: Colors.white,
@@ -270,58 +273,94 @@ class _HomeScreenState extends State<HomeScreen> {
             _buildDrawerItem(
               icon: Icons.translate,
               title: 'Text Translation',
-              onTap: () => _navigateTo(const TextTranslationScreen()),
+              onTap: () => _navigateToDeferred(
+                loadLibrary: text.loadLibrary,
+                screenBuilder: () => text.TextTranslationScreen(),
+                closeDrawer: true,
+              ),
             ),
             _buildDrawerItem(
               icon: Icons.mic,
               title: 'Speech Translation',
-              onTap: () => _navigateTo(const RealTimeSpeechScreen()),
+              onTap: () => _navigateToDeferred(
+                loadLibrary: speech.loadLibrary,
+                screenBuilder: () => speech.RealTimeSpeechScreen(),
+                closeDrawer: true,
+              ),
             ),
             _buildDrawerItem(
               icon: Icons.video_library,
               title: 'Video Translation',
-              onTap: () => _navigateTo(const VideoTranslationScreen()),
+              onTap: () => _navigateToDeferred(
+                loadLibrary: video.loadLibrary,
+                screenBuilder: () => video.VideoTranslationScreen(),
+                closeDrawer: true,
+              ),
             ),
             _buildDrawerItem(
               icon: Icons.camera_alt,
               title: 'Camera Translation',
-              onTap: () => _navigateTo(const CameraTranslationScreen()),
+              onTap: () => _navigateToDeferred(
+                loadLibrary: camera.loadLibrary,
+                screenBuilder: () => camera.CameraTranslationScreen(),
+                closeDrawer: true,
+              ),
             ),
-            
+
             // Education & Utilities (Under Development)
             _buildDrawerItem(
               icon: Icons.school,
               title: 'Education Tools',
               subtitle: 'Under Development',
-              onTap: () => _navigateTo(const LectureSummarizerScreen()),
+              onTap: () => _navigateToDeferred(
+                loadLibrary: lecture.loadLibrary,
+                screenBuilder: () => lecture.LectureSummarizerScreen(),
+                closeDrawer: true,
+              ),
             ),
             _buildDrawerItem(
               icon: Icons.offline_bolt,
               title: 'Offline Packs',
               subtitle: 'Under Development',
-              onTap: () => _navigateTo(const OfflinePacksScreen()),
+              onTap: () => _navigateToDeferred(
+                loadLibrary: offline.loadLibrary,
+                screenBuilder: () => offline.OfflinePacksScreen(),
+                closeDrawer: true,
+              ),
             ),
             _buildDrawerItem(
               icon: Icons.motorcycle,
               title: 'Driver Mode',
               subtitle: 'Under Development',
-              onTap: () => _navigateTo(const MotoristModeScreen()),
+              onTap: () => _navigateToDeferred(
+                loadLibrary: motorist.loadLibrary,
+                screenBuilder: () => motorist.MotoristModeScreen(),
+                closeDrawer: true,
+              ),
             ),
-            
+
             // Maps & Navigation
             _buildDrawerItem(
               icon: Icons.map,
               title: 'Google Maps',
-              onTap: () => _navigateTo(const GoogleMapsScreen()),
+              onTap: () => _navigateToDeferred(
+                loadLibrary: maps.loadLibrary,
+                screenBuilder: () => maps.GoogleMapsScreen(),
+                closeDrawer: true,
+              ),
             ),
-            
+
             const Divider(color: Colors.white54),
-            
+
             // Settings & Info
             _buildDrawerItem(
               icon: Icons.settings,
               title: 'Settings',
-              onTap: () => _navigateTo(const SettingsScreen()),
+              onTap: () => _navigateToDeferred(
+                loadLibrary: settings.loadLibrary,
+                screenBuilder: () => settings.SettingsScreen(),
+                closeDrawer: true,
+              ),
             ),
             _buildDrawerItem(
               icon: Icons.info,
@@ -408,11 +447,22 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   // MARK: - Helper Methods
-  void _navigateTo(Widget screen) {
-    Navigator.pop(context);
+  Future<void> _navigateToDeferred({
+    required Future<dynamic> Function() loadLibrary,
+    required Widget Function() screenBuilder,
+    bool closeDrawer = false,
+  }) async {
+    if (closeDrawer) {
+      Navigator.pop(context);
+    }
+
+    await loadLibrary();
+
+    if (!mounted) return;
+
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (context) => screen),
+      MaterialPageRoute(builder: (context) => screenBuilder()),
     );
   }
 

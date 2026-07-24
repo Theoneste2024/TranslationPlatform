@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 class LectureSummarizerScreen extends StatelessWidget {
-  const LectureSummarizerScreen({Key? key}) : super(key: key);
+  const LectureSummarizerScreen({super.key});
 
   @override
   Widget build(BuildContext context) {

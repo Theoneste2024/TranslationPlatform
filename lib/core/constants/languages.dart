@@ -34,15 +34,22 @@ class Languages {
       flagEmoji: '🇷🇼',
       isOfflineSupported: true,
     ),
-   
   ];
 
   static const List<LanguageModel> globalLanguages = [
-    LanguageModel(code: 'es', name: 'Spanish', nativeName: 'Español', flagEmoji: '🇪🇸'),
-    LanguageModel(code: 'de', name: 'German', nativeName: 'Deutsch', flagEmoji: '🇩🇪'),
-    LanguageModel(code: 'zh', name: 'Chinese', nativeName: '中文', flagEmoji: '🇨🇳'),
-    LanguageModel(code: 'ar', name: 'Arabic', nativeName: 'العربية', flagEmoji: '🇸🇦'),
-    LanguageModel(code: 'pt', name: 'Portuguese', nativeName: 'Português', flagEmoji: '🇵🇹'),
+    LanguageModel(
+        code: 'es', name: 'Spanish', nativeName: 'Español', flagEmoji: '🇪🇸'),
+    LanguageModel(
+        code: 'de', name: 'German', nativeName: 'Deutsch', flagEmoji: '🇩🇪'),
+    LanguageModel(
+        code: 'zh', name: 'Chinese', nativeName: '中文', flagEmoji: '🇨🇳'),
+    LanguageModel(
+        code: 'ar', name: 'Arabic', nativeName: 'العربية', flagEmoji: '🇸🇦'),
+    LanguageModel(
+        code: 'pt',
+        name: 'Portuguese',
+        nativeName: 'Português',
+        flagEmoji: '🇵🇹'),
   ];
 }
 

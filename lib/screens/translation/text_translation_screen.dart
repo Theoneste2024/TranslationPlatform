@@ -5,7 +5,7 @@ import '../../core/constants/app_constants.dart';
 import 'package:flutter/services.dart';
 
 class TextTranslationScreen extends StatefulWidget {
-  const TextTranslationScreen({Key? key}) : super(key: key);
+  const TextTranslationScreen({super.key});
 
   @override
   State<TextTranslationScreen> createState() => _TextTranslationScreenState();
@@ -32,75 +32,44 @@ class _TextTranslationScreenState extends State<TextTranslationScreen> {
   }
 
   Future<void> _translate() async {
-  if (_sourceController.text.isEmpty) return;
+    if (_sourceController.text.isEmpty) return;
 
-  setState(() => _isTranslating = true);
+    setState(() => _isTranslating = true);
 
-  try {
-    final response = await http.post(
-      Uri.parse(AppConstants.textTranslate),
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: jsonEncode({
-        "text": _sourceController.text,
-        "source_language": _sourceLanguage,
-        "target_language": _targetLanguage,
-      }),
-    );
+    try {
+      final response = await http.post(
+        Uri.parse(AppConstants.textTranslate),
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: jsonEncode({
+          "text": _sourceController.text,
+          "source_language": _sourceLanguage,
+          "target_language": _targetLanguage,
+        }),
+      );
 
-    final data = jsonDecode(response.body);
+      final data = jsonDecode(response.body);
 
-    if (response.statusCode == 200) {
-      setState(() {
-        _targetController.text = data["translated_text"];
-      });
-    } else {
-      throw Exception(data["error"]);
+      if (response.statusCode == 200) {
+        setState(() {
+          _targetController.text = data["translated_text"];
+        });
+      } else {
+        throw Exception(data["error"]);
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text("Translation failed: $e"),
+          backgroundColor: Colors.red,
+        ),
+      );
     }
-  } catch (e) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text("Translation failed: $e"),
-        backgroundColor: Colors.red,
-      ),
-    );
-  }
 
-  setState(() => _isTranslating = false);
-}
-
-  // ✅ FALLBACK DEMO TRANSLATIONS (when no internet)
-  String _getDemoTranslation(String text) {
-    String lowerText = text.toLowerCase();
-    
-    if (_sourceLanguage == 'en' && _targetLanguage == 'rw') {
-      if (lowerText.contains('hello')) return 'Muraho';
-      if (lowerText.contains('how are you')) return 'Amakuru';
-      if (lowerText.contains('thank you')) return 'Urakoze';
-      if (lowerText.contains('good morning')) return 'Mwaramutse';
-      if (lowerText.contains('good evening')) return 'Mwiriwe';
-      if (lowerText.contains('welcome')) return 'Murakaza neza';
-      if (lowerText.contains('goodbye')) return 'Murabeho';
-      return 'Translation: $text';
-    }
-    else if (_sourceLanguage == 'en' && _targetLanguage == 'fr') {
-      if (lowerText.contains('hello')) return 'Bonjour';
-      if (lowerText.contains('how are you')) return 'Comment allez-vous';
-      if (lowerText.contains('thank you')) return 'Merci';
-      if (lowerText.contains('good morning')) return 'Bonjour';
-      if (lowerText.contains('good evening')) return 'Bonsoir';
-      if (lowerText.contains('welcome')) return 'Bienvenue';
-      if (lowerText.contains('goodbye')) return 'Au revoir';
-      return 'Traduction: $text';
-    }
-    else if (_sourceLanguage == 'en' && _targetLanguage == 'rw') {
-      if (lowerText.contains('hello')) return 'Muraho';
-      return 'Translation: $text';
-    }
-    else {
-      return 'Translation: $text';
-    }
+    if (!mounted) return;
+    setState(() => _isTranslating = false);
   }
 
   void _swapLanguages() {
@@ -108,7 +77,7 @@ class _TextTranslationScreenState extends State<TextTranslationScreen> {
       final temp = _sourceLanguage;
       _sourceLanguage = _targetLanguage;
       _targetLanguage = temp;
-      
+
       final tempText = _sourceController.text;
       _sourceController.text = _targetController.text;
       _targetController.text = tempText;
@@ -169,13 +138,11 @@ class _TextTranslationScreenState extends State<TextTranslationScreen> {
                       ),
                     ),
                   ),
-                  
                   IconButton(
                     icon: const Icon(Icons.swap_horiz),
                     onPressed: _swapLanguages,
                     color: Colors.blue,
                   ),
-                  
                   Expanded(
                     child: DropdownButtonHideUnderline(
                       child: DropdownButton<String>(
@@ -202,9 +169,9 @@ class _TextTranslationScreenState extends State<TextTranslationScreen> {
                 ],
               ),
             ),
-            
+
             const SizedBox(height: 20),
-            
+
             // Source Text Input
             Expanded(
               flex: 3,
@@ -269,9 +236,9 @@ class _TextTranslationScreenState extends State<TextTranslationScreen> {
                 ),
               ),
             ),
-            
+
             const SizedBox(height: 16),
-            
+
             // Translate Button
             SizedBox(
               width: double.infinity,
@@ -311,9 +278,9 @@ class _TextTranslationScreenState extends State<TextTranslationScreen> {
                       ),
               ),
             ),
-            
+
             const SizedBox(height: 16),
-            
+
             // Translation Result
             Expanded(
               flex: 3,
@@ -372,14 +339,16 @@ class _TextTranslationScreenState extends State<TextTranslationScreen> {
                             IconButton(
                               icon: const Icon(Icons.copy),
                               onPressed: () async {
-                                  // Copy to clipboard
-                                  await Clipboard.setData(
-                                  ClipboardData(text: _targetController.text),);
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
-                                      content: Text("Copied to clipboard!"),
-                                      ),
-                                      );
+                                // Copy to clipboard
+                                await Clipboard.setData(
+                                  ClipboardData(text: _targetController.text),
+                                );
+                                if (!context.mounted) return;
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text("Copied to clipboard!"),
+                                  ),
+                                );
                               },
                               color: Colors.blue.shade700,
                             ),

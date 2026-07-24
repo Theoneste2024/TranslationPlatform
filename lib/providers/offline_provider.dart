@@ -3,7 +3,7 @@ import 'package:connectivity_plus/connectivity_plus.dart';
 
 class OfflineProvider extends ChangeNotifier {
   bool _isOnline = true;
-  List<String> _downloadedPacks = [];
+  final List<String> _downloadedPacks = [];
   int _activeDownloads = 0;
   final Connectivity _connectivity = Connectivity();
 
@@ -16,8 +16,8 @@ class OfflineProvider extends ChangeNotifier {
   int get activeDownloads => _activeDownloads;
 
   void _initConnectivity() {
-    _connectivity.onConnectivityChanged.listen((result) {
-      _isOnline = result != ConnectivityResult.none;
+    _connectivity.onConnectivityChanged.listen((results) {
+      _isOnline = !results.contains(ConnectivityResult.none);
       notifyListeners();
     });
   }
@@ -37,7 +37,9 @@ class OfflineProvider extends ChangeNotifier {
   }
 
   void cancelDownload(String packId) {
-    _activeDownloads--;
+    if (_activeDownloads > 0) {
+      _activeDownloads--;
+    }
     notifyListeners();
   }
 }

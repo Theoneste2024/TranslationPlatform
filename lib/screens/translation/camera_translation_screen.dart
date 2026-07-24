@@ -1,7 +1,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:google_ml_kit/google_ml_kit.dart';
+import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
@@ -9,7 +9,7 @@ import 'package:dotted_border/dotted_border.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 class CameraTranslationScreen extends StatefulWidget {
-  const CameraTranslationScreen({Key? key}) : super(key: key);
+  const CameraTranslationScreen({super.key});
 
   @override
   State<CameraTranslationScreen> createState() =>
@@ -42,10 +42,9 @@ class _CameraTranslationScreenState extends State<CameraTranslationScreen> {
   // 🔄 Switch front/rear camera
   void _switchCamera() {
     setState(() {
-      _cameraDevice =
-          _cameraDevice == CameraDevice.rear
-              ? CameraDevice.front
-              : CameraDevice.rear;
+      _cameraDevice = _cameraDevice == CameraDevice.rear
+          ? CameraDevice.front
+          : CameraDevice.rear;
     });
   }
 
@@ -75,6 +74,7 @@ class _CameraTranslationScreenState extends State<CameraTranslationScreen> {
     bool hasPermission = await _requestCameraPermission();
 
     if (!hasPermission) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Camera permission required")),
       );
@@ -120,9 +120,8 @@ class _CameraTranslationScreenState extends State<CameraTranslationScreen> {
 
     try {
       final inputImage = InputImage.fromFile(_selectedImage!);
-      final textRecognizer = GoogleMlKit.vision.textRecognizer();
-      final recognizedText =
-          await textRecognizer.processImage(inputImage);
+      final textRecognizer = TextRecognizer();
+      final recognizedText = await textRecognizer.processImage(inputImage);
 
       String extracted = '';
       for (var block in recognizedText.blocks) {
@@ -132,6 +131,8 @@ class _CameraTranslationScreenState extends State<CameraTranslationScreen> {
       }
 
       await textRecognizer.close();
+
+      if (!mounted) return;
 
       setState(() {
         _extractedText =
@@ -143,6 +144,7 @@ class _CameraTranslationScreenState extends State<CameraTranslationScreen> {
         _translateText();
       }
     } catch (e) {
+      if (!mounted) return;
       setState(() => _isProcessing = false);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text("Error processing image: $e")),
@@ -162,6 +164,8 @@ class _CameraTranslationScreenState extends State<CameraTranslationScreen> {
 
       final response = await http.get(url);
 
+      if (!mounted) return;
+
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
         final translated = data['responseData']['translatedText'] ?? '';
@@ -178,6 +182,7 @@ class _CameraTranslationScreenState extends State<CameraTranslationScreen> {
         setState(() => _isProcessing = false);
       }
     } catch (e) {
+      if (!mounted) return;
       setState(() => _isProcessing = false);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text("Error translating text: $e")),
@@ -236,9 +241,9 @@ class _CameraTranslationScreenState extends State<CameraTranslationScreen> {
                       height: 200,
                       width: double.infinity,
                       alignment: Alignment.center,
-                      child: Column(
+                      child: const Column(
                         mainAxisAlignment: MainAxisAlignment.center,
-                        children: const [
+                        children: [
                           Icon(Icons.camera_alt, size: 60),
                           SizedBox(height: 10),
                           Text("Take or Upload Image"),

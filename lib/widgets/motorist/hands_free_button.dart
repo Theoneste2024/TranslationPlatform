@@ -5,10 +5,10 @@ class HandsFreeButton extends StatelessWidget {
   final bool isListening;
 
   const HandsFreeButton({
-    Key? key,
+    super.key,
     required this.onPressed,
     this.isListening = false,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -20,7 +20,8 @@ class HandsFreeButton extends StatelessWidget {
         color: isListening ? Colors.red : Colors.blue,
         boxShadow: [
           BoxShadow(
-            color: (isListening ? Colors.red : Colors.blue).withOpacity(0.3),
+            color:
+                (isListening ? Colors.red : Colors.blue).withValues(alpha: 0.3),
             blurRadius: 10,
             spreadRadius: 2,
           ),

@@ -4,7 +4,7 @@ import '../../providers/offline_provider.dart';
 import '../../core/constants/languages.dart';
 
 class OfflinePacksScreen extends StatefulWidget {
-  const OfflinePacksScreen({Key? key}) : super(key: key);
+  const OfflinePacksScreen({super.key});
 
   @override
   State<OfflinePacksScreen> createState() => _OfflinePacksScreenState();
@@ -190,7 +190,7 @@ class _OfflinePacksScreenState extends State<OfflinePacksScreen> {
               itemBuilder: (context, index) {
                 final pack = _availablePacks[index];
                 final isDownloaded = offlineProvider.isPackDownloaded(pack.id);
-                
+
                 return Card(
                   margin: const EdgeInsets.only(bottom: 12),
                   shape: RoundedRectangleBorder(
@@ -208,7 +208,7 @@ class _OfflinePacksScreenState extends State<OfflinePacksScreen> {
                               decoration: BoxDecoration(
                                 color: Theme.of(context)
                                     .primaryColor
-                                    .withOpacity(0.1),
+                                    .withValues(alpha: 0.1),
                                 borderRadius: BorderRadius.circular(12),
                               ),
                               child: Icon(
@@ -282,7 +282,7 @@ class _OfflinePacksScreenState extends State<OfflinePacksScreen> {
                                   ],
                                 ),
                               );
-                            }).toList(),
+                            }),
                           ],
                         ),
                         const SizedBox(height: 16),
@@ -348,7 +348,7 @@ class _OfflinePacksScreenState extends State<OfflinePacksScreen> {
                                   ],
                                 ),
                               ),
-                            
+
                             // Download button
                             if (isDownloaded)
                               Container(
@@ -385,11 +385,12 @@ class _OfflinePacksScreenState extends State<OfflinePacksScreen> {
                                   _downloadPack(context, pack);
                                 },
                                 icon: const Icon(Icons.download, size: 18),
-                                label: Text(
+                                label: const Text(
                                   'Download', // All packs are free now
                                 ),
                                 style: ElevatedButton.styleFrom(
-                                  backgroundColor: Theme.of(context).primaryColor,
+                                  backgroundColor:
+                                      Theme.of(context).primaryColor,
                                   foregroundColor: Colors.white,
                                   elevation: 0,
                                   shape: RoundedRectangleBorder(
@@ -424,7 +425,7 @@ class _OfflinePacksScreenState extends State<OfflinePacksScreen> {
     // } else {
     // Start free download
     offlineProvider.downloadPack(pack.id);
-    
+
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text('Downloading ${pack.name}...'),
@@ -589,7 +590,6 @@ class _OfflinePacksScreenState extends State<OfflinePacksScreen> {
     });
   }
   */
-
 }
 
 class OfflinePack {

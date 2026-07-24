@@ -248,6 +248,52 @@ def _json_stream_event(payload):
     return json.dumps(payload, ensure_ascii=False) + "\n"
 
 
+def _should_fallback_to_download(segment):
+    if not isinstance(segment, dict):
+        return False
+    if segment.get("fallback_needed") is True:
+        return True
+    message = str(segment.get("message") or "").lower()
+    if segment.get("type") == "error" and (
+        "stream" in message
+        or "connection" in message
+        or "transcription failed" in message
+        or "ffmpeg" in message
+    ):
+        return True
+    return False
+
+
+def _normalize_stream_segments(stream_segments):
+    """Clamp stream segments into a monotonic, non-overlapping timeline."""
+    last_end = None
+    for segment in stream_segments:
+        if not isinstance(segment, dict) or segment.get("type") != "segment":
+            yield segment
+            continue
+
+        try:
+            start = float(segment.get("start") or 0)
+            end = float(segment.get("end") or start or 0)
+        except (TypeError, ValueError):
+            yield segment
+            continue
+
+        if end <= start:
+            end = start + 0.25
+
+        if last_end is not None and start < last_end:
+            start = last_end
+            if end <= start:
+                end = start + 0.25
+
+        normalized_segment = dict(segment)
+        normalized_segment["start"] = start
+        normalized_segment["end"] = end
+        last_end = end
+        yield normalized_segment
+
+
 @video_bp.route("/video-translate-stream", methods=["POST"])
 def video_translate_stream():
     """Stream-based video translation endpoint for real-time subtitle delivery."""
@@ -284,8 +330,11 @@ def video_translate_stream():
                 "type": "status",
                 "message": "Preparing YouTube audio (stream mode)"
             })
-            
+
             force_download_flag = str(force_download).strip().lower() in ("1", "true", "yes")
+            need_download_fallback = False
+            segment_count = 0
+            stream_failed = False
 
             if force_download_flag:
                 logger.info("Force download mode enabled")
@@ -297,12 +346,14 @@ def video_translate_stream():
                     if not temp_file_path or not os.path.exists(temp_file_path):
                         raise RuntimeError('Download did not produce a file')
 
-                    for segment in stream_translated_video_segments(
+                    for segment in _normalize_stream_segments(stream_translated_video_segments(
                         temp_file_path,
                         source_language,
                         target_language,
                         model
-                    ):
+                    )):
+                        if isinstance(segment, dict) and segment.get("type") == "segment":
+                            segment_count += 1
                         yield _json_stream_event(segment)
 
                 except Exception as e:
@@ -312,30 +363,39 @@ def video_translate_stream():
                     remove_temp_dir(temp_dir)
 
             else:
-                # Try streaming first
                 logger.info("Streaming mode: attempting direct URL stream")
-                stream_url = get_youtube_stream_url(youtube_url)
+                try:
+                    stream_url = get_youtube_stream_url(youtube_url)
+                except Exception as e:
+                    logger.warning(f"Stream URL extraction failed, falling back to download: {e}")
+                    need_download_fallback = True
+                    stream_failed = True
+                    yield _json_stream_event({
+                        "type": "status",
+                        "message": "Stream unavailable, downloading for translation"
+                    })
+                else:
+                    yield _json_stream_event({
+                        "type": "status",
+                        "message": "Listening for spoken phrases"
+                    })
 
-                yield _json_stream_event({
-                    "type": "status",
-                    "message": "Listening for spoken phrases"
-                })
+                    for segment in _normalize_stream_segments(stream_translated_video_segments(
+                        stream_url,
+                        source_language,
+                        target_language,
+                        model
+                    )):
+                        if _should_fallback_to_download(segment):
+                            logger.warning("Stream translation requested download fallback")
+                            need_download_fallback = True
+                            stream_failed = True
+                            yield _json_stream_event(segment)
+                            break
 
-                need_download_fallback = False
-
-                for segment in stream_translated_video_segments(
-                    stream_url,
-                    source_language,
-                    target_language,
-                    model
-                ):
-                    if isinstance(segment, dict) and segment.get("type") == "error" and segment.get("message") == "Transcription failed":
-                        logger.warning("Stream transcription failed, attempting fallback download")
-                        need_download_fallback = True
+                        if isinstance(segment, dict) and segment.get("type") == "segment":
+                            segment_count += 1
                         yield _json_stream_event(segment)
-                        break
-
-                    yield _json_stream_event(segment)
 
                 if need_download_fallback:
                     logger.info("Executing fallback download strategy")
@@ -354,18 +414,21 @@ def video_translate_stream():
                             })
                             return
 
-                        # Re-run streaming on the local file
-                        for segment in stream_translated_video_segments(
+                        for segment in _normalize_stream_segments(stream_translated_video_segments(
                             temp_file_path,
                             source_language,
                             target_language,
                             model
-                        ):
+                        )):
+                            if isinstance(segment, dict) and segment.get("type") == "segment":
+                                segment_count += 1
                             yield _json_stream_event(segment)
 
                     finally:
                         remove_temp_dir(temp_dir)
 
+            if segment_count == 0 and not force_download_flag and not need_download_fallback:
+                logger.info("No stream segments were produced, ending translation stream")
             yield _json_stream_event({"type": "complete"})
 
         except Exception as e:
@@ -383,179 +446,6 @@ def video_translate_stream():
             "X-Accel-Buffering": "no"
         }
     )
-
-
-@video_bp.route("/youtube/live-translate", methods=["POST"])
-def youtube_live_translate():
-    """
-    Stream real-time translation of a YouTube Live stream or regular video.
-    Falls back to download if streaming fails.
-    
-    Request JSON:
-    {
-        "youtube_url": "https://www.youtube.com/watch?v=...",
-        "source_language": "en",
-        "target_language": "rw",
-        "model": "gemini-2.5-flash"  # optional
-    }
-    """
-    try:
-        # Parse JSON body
-        data = request.get_json() or {}
-        
-        youtube_url = data.get("youtube_url", "").strip()
-        source_language = data.get("source_language", "auto")
-        target_language = data.get("target_language", "")
-        model = data.get("model", "")
-        
-        if not youtube_url:
-            return jsonify({"error": "Missing youtube_url"}), 400
-        if not target_language:
-            return jsonify({"error": "Missing target_language"}), 400
-        
-        # Normalize and validate YouTube URL
-        try:
-            youtube_url = normalize_youtube_url(youtube_url)
-            logger.info(f"YouTube Live translate: {youtube_url} ({source_language} -> {target_language})")
-        except ValueError as e:
-            return jsonify({"error": str(e)}), 400
-        
-        def generate():
-            stream_url = None
-            temp_dir = None
-            
-            try:
-                # ============================================
-                # PHASE 1: Try streaming mode (no download)
-                # ============================================
-                yield _json_stream_event({
-                    "type": "status",
-                    "message": "Preparing YouTube stream"
-                })
-                
-                try:
-                    logger.info("Attempting stream mode")
-                    stream_url = get_youtube_stream_url(youtube_url)
-                    
-                    yield _json_stream_event({
-                        "type": "status",
-                        "message": "Connected to stream, listening for audio"
-                    })
-                    
-                    # Collect segments from streaming
-                    segment_count = 0
-                    stream_failed = False
-                    
-                    for segment in stream_translated_video_segments(
-                        stream_url,
-                        source_language,
-                        target_language,
-                        model
-                    ):
-                        # Check if streaming failed
-                        if isinstance(segment, dict) and segment.get("fallback_needed"):
-                            logger.warning("Stream mode failed, will fall back to download")
-                            stream_failed = True
-                            yield _json_stream_event(segment)
-                            break
-                        
-                        # Successful segment
-                        segment_count += 1
-                        yield _json_stream_event(segment)
-                    
-                    # If streaming succeeded, we're done
-                    if segment_count > 0 and not stream_failed:
-                        logger.info(f"Stream translation completed: {segment_count} segments")
-                        yield _json_stream_event({"type": "complete"})
-                        return
-                    
-                except Exception as e:
-                    logger.warning(f"Stream mode failed with exception: {e}", exc_info=True)
-                    # Fall through to fallback
-                
-                # ============================================
-                # PHASE 2: Fall back to download mode
-                # ============================================
-                if not (segment_count > 0 and not stream_failed):
-                    logger.info("PHASE 2: Download fallback activated")
-                    
-                    yield _json_stream_event({
-                        "type": "status",
-                        "message": "Stream unavailable, downloading for translation"
-                    })
-                    
-                    temp_dir = tempfile.mkdtemp()
-                    try:
-                        # Download the video
-                        logger.info(f"Downloading: {youtube_url}")
-                        temp_file_path = download_youtube_with_yt_dlp(youtube_url, temp_dir)
-                        
-                        if not temp_file_path:
-                            raise RuntimeError("Download did not return a file path")
-                        
-                        # Process the downloaded file
-                        yield _json_stream_event({
-                            "type": "status",
-                            "message": "Processing downloaded video"
-                        })
-                        
-                        logger.info(f"Processing downloaded file: {temp_file_path}")
-                        
-                        fallback_segment_count = 0
-                        for segment in stream_translated_video_segments(
-                            temp_file_path,
-                            source_language,
-                            target_language,
-                            model
-                        ):
-                            fallback_segment_count += 1
-                            logger.info(f"Download segment {fallback_segment_count}: {segment.get('type')}")
-                            yield _json_stream_event(segment)
-                        
-                        logger.info(f"Download translation completed: {fallback_segment_count} segments")
-                        
-                    except Exception as e:
-                        logger.error(f"Download fallback failed: {e}", exc_info=True)
-                        yield _json_stream_event({
-                            "type": "error",
-                            "message": "Download fallback failed",
-                            "error": str(e)
-                        })
-                    finally:
-                        # Clean up temp directory
-                        remove_temp_dir(temp_dir)
-                
-                # Signal completion
-                yield _json_stream_event({"type": "complete"})
-                
-            except Exception as e:
-                logger.error(f"Unexpected error in youtube_live_translate: {e}", exc_info=True)
-                try:
-                    yield _json_stream_event({
-                        "type": "error",
-                        "message": "Translation service error",
-                        "error": str(e)
-                    })
-                except Exception as yield_error:
-                    logger.error(f"Failed to yield error event: {yield_error}")
-        
-        return Response(
-            stream_with_context(generate()),
-            mimetype="application/x-ndjson",
-            headers={
-                "Cache-Control": "no-cache",
-                "X-Accel-Buffering": "no"
-            }
-        )
-    
-    except Exception as e:
-        logger.error(f"Error in youtube_live_translate handler: {e}", exc_info=True)
-        return jsonify({"error": "Internal server error"}), 500
-
-
-@video_bp.route("/youtube/live-translate", methods=["OPTIONS"])
-def youtube_live_translate_options():
-    return "", 204
 
 
 # WebSocket endpoint for real-time translation of live audio streams

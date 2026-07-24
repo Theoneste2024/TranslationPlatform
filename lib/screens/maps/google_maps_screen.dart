@@ -10,7 +10,7 @@ import 'dart:convert';
 import 'package:flutter_nominatim/flutter_nominatim.dart';
 
 class GoogleMapsScreen extends StatefulWidget {
-  const GoogleMapsScreen({Key? key}) : super(key: key);
+  const GoogleMapsScreen({super.key});
 
   @override
   State<GoogleMapsScreen> createState() => _GoogleMapsScreenState();
@@ -19,47 +19,62 @@ class GoogleMapsScreen extends StatefulWidget {
 class _GoogleMapsScreenState extends State<GoogleMapsScreen> {
   // Map Controller
   final MapController _mapController = MapController();
-  
+
   // Location & Navigation
   ll.LatLng? _currentPosition;
   ll.LatLng? _destinationPosition;
   String? _destinationAddress;
-  
+
   // UI States
   bool _isLoading = true;
   bool _isNavigating = false;
   bool _showDestinationInput = false;
   bool _isNearbyPlacesVisible = false;
   String? _selectedPlaceType;
-  
+
   // Travel Mode
   String _travelMode = 'driving';
   final List<Map<String, dynamic>> _travelModes = [
-    {'mode': 'driving', 'icon': Icons.directions_car, 'label': 'Car', 'color': Colors.blue},
-    {'mode': 'walking', 'icon': Icons.directions_walk, 'label': 'Walk', 'color': Colors.green},
-    {'mode': 'cycling', 'icon': Icons.directions_bike, 'label': 'Motor', 'color': Colors.orange},
+    {
+      'mode': 'driving',
+      'icon': Icons.directions_car,
+      'label': 'Car',
+      'color': Colors.blue
+    },
+    {
+      'mode': 'walking',
+      'icon': Icons.directions_walk,
+      'label': 'Walk',
+      'color': Colors.green
+    },
+    {
+      'mode': 'cycling',
+      'icon': Icons.directions_bike,
+      'label': 'Motor',
+      'color': Colors.orange
+    },
   ];
-  
+
   // Markers & Routes
   final List<Marker> _markers = [];
   final List<Polyline> _polylines = [];
-  
+
   // Route Info
   double _totalDistance = 0.0;
   double _totalDuration = 0.0;
   String _routeSummary = '';
-  
+
   // Zoom level
   double _currentZoom = 12.0;
   final double _minZoom = 3.0;
   final double _maxZoom = 19.0;
-  
+
   // Destination Text Controller
   final TextEditingController _destinationController = TextEditingController();
-  
+
   // GEOCODING SERVICE
   late final Nominatim _nominatim;
-  
+
   // SEARCH RESULTS
   List<Map<String, dynamic>> _searchResults = [];
   bool _isSearching = false;
@@ -67,45 +82,145 @@ class _GoogleMapsScreenState extends State<GoogleMapsScreen> {
 
   // Kigali, Rwanda center
   final ll.LatLng _kigaliCenter = const ll.LatLng(-1.9441, 30.0619);
-  
+
   // Stream subscription for live location
   StreamSubscription<Position>? _positionStreamSubscription;
 
   // Nearby Places Data
   final List<Map<String, dynamic>> _nearbyPlaceTypes = [
-    {'type': 'hospital', 'icon': Icons.local_hospital, 'label': 'Hospitals', 'color': Colors.red},
-    {'type': 'hotel', 'icon': Icons.hotel, 'label': 'Hotels', 'color': Colors.purple},
-    {'type': 'restaurant', 'icon': Icons.restaurant, 'label': 'Restaurants', 'color': Colors.orange},
-    {'type': 'cafe', 'icon': Icons.local_cafe, 'label': 'Coffee Shops', 'color': Colors.brown},
-    {'type': 'bar', 'icon': Icons.local_bar, 'label': 'Bars', 'color': Colors.indigo},
+    {
+      'type': 'hospital',
+      'icon': Icons.local_hospital,
+      'label': 'Hospitals',
+      'color': Colors.red
+    },
+    {
+      'type': 'hotel',
+      'icon': Icons.hotel,
+      'label': 'Hotels',
+      'color': Colors.purple
+    },
+    {
+      'type': 'restaurant',
+      'icon': Icons.restaurant,
+      'label': 'Restaurants',
+      'color': Colors.orange
+    },
+    {
+      'type': 'cafe',
+      'icon': Icons.local_cafe,
+      'label': 'Coffee Shops',
+      'color': Colors.brown
+    },
+    {
+      'type': 'bar',
+      'icon': Icons.local_bar,
+      'label': 'Bars',
+      'color': Colors.indigo
+    },
   ];
 
   // Sample nearby places in Kigali
   final Map<String, List<Map<String, dynamic>>> _nearbyPlaces = {
     'hospital': [
-      {'name': 'King Faisal Hospital', 'lat': -1.9653, 'lng': 30.1086, 'phone': '+250 788 384 100'},
-      {'name': 'CHUK - Kigali', 'lat': -1.9361, 'lng': 30.0567, 'phone': '+250 788 384 200'},
-      {'name': 'Kibagabaga Hospital', 'lat': -1.9258, 'lng': 30.0983, 'phone': '+250 788 384 300'},
+      {
+        'name': 'King Faisal Hospital',
+        'lat': -1.9653,
+        'lng': 30.1086,
+        'phone': '+250 788 384 100'
+      },
+      {
+        'name': 'CHUK - Kigali',
+        'lat': -1.9361,
+        'lng': 30.0567,
+        'phone': '+250 788 384 200'
+      },
+      {
+        'name': 'Kibagabaga Hospital',
+        'lat': -1.9258,
+        'lng': 30.0983,
+        'phone': '+250 788 384 300'
+      },
     ],
     'hotel': [
-      {'name': 'Marriott Hotel Kigali', 'lat': -1.9456, 'lng': 30.0628, 'phone': '+250 788 123 456'},
-      {'name': 'Radisson Blu Kigali', 'lat': -1.9497, 'lng': 30.0919, 'phone': '+250 788 123 457'},
-      {'name': 'Kigali Serena Hotel', 'lat': -1.9528, 'lng': 30.0997, 'phone': '+250 788 123 458'},
+      {
+        'name': 'Marriott Hotel Kigali',
+        'lat': -1.9456,
+        'lng': 30.0628,
+        'phone': '+250 788 123 456'
+      },
+      {
+        'name': 'Radisson Blu Kigali',
+        'lat': -1.9497,
+        'lng': 30.0919,
+        'phone': '+250 788 123 457'
+      },
+      {
+        'name': 'Kigali Serena Hotel',
+        'lat': -1.9528,
+        'lng': 30.0997,
+        'phone': '+250 788 123 458'
+      },
     ],
     'restaurant': [
-      {'name': 'The Hut Restaurant', 'lat': -1.9472, 'lng': 30.0914, 'phone': '+250 788 234 567'},
-      {'name': 'Sole Luna', 'lat': -1.9458, 'lng': 30.0642, 'phone': '+250 788 234 568'},
-      {'name': 'Repub Lounge', 'lat': -1.9483, 'lng': 30.0581, 'phone': '+250 788 234 569'},
+      {
+        'name': 'The Hut Restaurant',
+        'lat': -1.9472,
+        'lng': 30.0914,
+        'phone': '+250 788 234 567'
+      },
+      {
+        'name': 'Sole Luna',
+        'lat': -1.9458,
+        'lng': 30.0642,
+        'phone': '+250 788 234 568'
+      },
+      {
+        'name': 'Repub Lounge',
+        'lat': -1.9483,
+        'lng': 30.0581,
+        'phone': '+250 788 234 569'
+      },
     ],
     'cafe': [
-      {'name': 'Bourbon Coffee - KG220', 'lat': -1.9447, 'lng': 30.0639, 'phone': '+250 788 345 678'},
-      {'name': 'Java House Kigali', 'lat': -1.9469, 'lng': 30.0625, 'phone': '+250 788 345 679'},
-      {'name': 'Question Coffee', 'lat': -1.9522, 'lng': 30.0967, 'phone': '+250 788 345 680'},
+      {
+        'name': 'Bourbon Coffee - KG220',
+        'lat': -1.9447,
+        'lng': 30.0639,
+        'phone': '+250 788 345 678'
+      },
+      {
+        'name': 'Java House Kigali',
+        'lat': -1.9469,
+        'lng': 30.0625,
+        'phone': '+250 788 345 679'
+      },
+      {
+        'name': 'Question Coffee',
+        'lat': -1.9522,
+        'lng': 30.0967,
+        'phone': '+250 788 345 680'
+      },
     ],
     'bar': [
-      {'name': 'Papyrus Bar', 'lat': -1.9453, 'lng': 30.0614, 'phone': '+250 788 456 789'},
-      {'name': 'Cava Bar', 'lat': -1.9478, 'lng': 30.0631, 'phone': '+250 788 456 790'},
-      {'name': 'The Green Bar', 'lat': -1.9519, 'lng': 30.0994, 'phone': '+250 788 456 791'},
+      {
+        'name': 'Papyrus Bar',
+        'lat': -1.9453,
+        'lng': 30.0614,
+        'phone': '+250 788 456 789'
+      },
+      {
+        'name': 'Cava Bar',
+        'lat': -1.9478,
+        'lng': 30.0631,
+        'phone': '+250 788 456 790'
+      },
+      {
+        'name': 'The Green Bar',
+        'lat': -1.9519,
+        'lng': 30.0994,
+        'phone': '+250 788 456 791'
+      },
     ],
   };
 
@@ -146,7 +261,7 @@ class _GoogleMapsScreenState extends State<GoogleMapsScreen> {
   // Location Services
   Future<void> _initLocation() async {
     setState(() => _isLoading = true);
-    
+
     try {
       bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
       if (!serviceEnabled) {
@@ -174,18 +289,17 @@ class _GoogleMapsScreenState extends State<GoogleMapsScreen> {
       Position position = await Geolocator.getCurrentPosition(
         desiredAccuracy: LocationAccuracy.high,
       );
-      
+
       setState(() {
         _currentPosition = ll.LatLng(position.latitude, position.longitude);
         _isLoading = false;
       });
-      
+
       _mapController.move(_currentPosition!, _currentZoom);
       _updateCurrentLocationMarker();
       _showSnackBar('📍 Live location active!', Colors.green);
-      
     } catch (e) {
-      print('Location error: $e');
+      debugPrint('Location error: $e');
       _setDefaultLocation();
     }
   }
@@ -217,7 +331,7 @@ class _GoogleMapsScreenState extends State<GoogleMapsScreen> {
               border: Border.all(color: Colors.white, width: 3),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.blue.withOpacity(0.5),
+                  color: Colors.blue.withValues(alpha: 0.5),
                   blurRadius: 12,
                   spreadRadius: 4,
                 ),
@@ -254,7 +368,7 @@ class _GoogleMapsScreenState extends State<GoogleMapsScreen> {
 
   void _addDestinationMarker() {
     if (_destinationPosition == null) return;
-    
+
     setState(() {
       _markers.removeWhere((m) => m.key == const ValueKey('destination'));
       _markers.add(
@@ -270,7 +384,7 @@ class _GoogleMapsScreenState extends State<GoogleMapsScreen> {
               border: Border.all(color: Colors.white, width: 3),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.red.withOpacity(0.5),
+                  color: Colors.red.withValues(alpha: 0.5),
                   blurRadius: 12,
                   spreadRadius: 4,
                 ),
@@ -301,22 +415,29 @@ class _GoogleMapsScreenState extends State<GoogleMapsScreen> {
           // Extract city name from display name
           String displayName = place.displayName;
           String shortName = displayName.split(',').first;
-          
+
           return {
             'display_name': displayName,
-            'lat': place.latitude,      // ✅ Use latitude
-            'lon': place.longitude,     // ✅ Use longitude
-            'type': shortName.contains('Hotel') ? 'hotel' :
-                    shortName.contains('Hospital') ? 'hospital' :
-                    shortName.contains('Restaurant') ? 'restaurant' :
-                    shortName.contains('Cafe') || shortName.contains('Coffee') ? 'cafe' :
-                    shortName.contains('Bar') ? 'bar' : 'place',
+            'lat': place.latitude, // ✅ Use latitude
+            'lon': place.longitude, // ✅ Use longitude
+            'type': shortName.contains('Hotel')
+                ? 'hotel'
+                : shortName.contains('Hospital')
+                    ? 'hospital'
+                    : shortName.contains('Restaurant')
+                        ? 'restaurant'
+                        : shortName.contains('Cafe') ||
+                                shortName.contains('Coffee')
+                            ? 'cafe'
+                            : shortName.contains('Bar')
+                                ? 'bar'
+                                : 'place',
           };
         }).toList();
         _isSearching = false;
       });
     } catch (e) {
-      print('Search error: $e');
+      debugPrint('Search error: $e');
       setState(() => _isSearching = false);
       _showSnackBar('Search failed. Please try again.', Colors.red);
     }
@@ -327,11 +448,13 @@ class _GoogleMapsScreenState extends State<GoogleMapsScreen> {
       _searchResults = [];
       _searchFocusNode.unfocus();
     });
-    
+
     final position = LatLng(result['lat'], result['lon']);
     _setDestination(position, result['display_name']);
-    
-    _showSnackBar('📍 Destination set to ${result['display_name'].toString().split(',').first}', Colors.green);
+
+    _showSnackBar(
+        '📍 Destination set to ${result['display_name'].toString().split(',').first}',
+        Colors.green);
   }
 
   // Nearby Places
@@ -340,25 +463,22 @@ class _GoogleMapsScreenState extends State<GoogleMapsScreen> {
       if (_selectedPlaceType == placeType && _isNearbyPlacesVisible) {
         _isNearbyPlacesVisible = false;
         _selectedPlaceType = null;
-        _markers.removeWhere((m) => 
-          m.key.toString().contains('nearby_')
-        );
+        _markers.removeWhere((m) => m.key.toString().contains('nearby_'));
       } else {
         _isNearbyPlacesVisible = true;
         _selectedPlaceType = placeType;
-        _markers.removeWhere((m) => 
-          m.key.toString().contains('nearby_')
-        );
-        
+        _markers.removeWhere((m) => m.key.toString().contains('nearby_'));
+
         final places = _nearbyPlaces[placeType] ?? [];
         final placeColor = _nearbyPlaceTypes.firstWhere(
           (p) => p['type'] == placeType,
           orElse: () => {'color': Colors.grey},
         )['color'];
-        
+
         for (var place in places) {
-          final uniqueKey = 'nearby_${placeType}_${place['name'].replaceAll(' ', '_')}';
-          
+          final uniqueKey =
+              'nearby_${placeType}_${place['name'].replaceAll(' ', '_')}';
+
           _markers.add(
             Marker(
               key: ValueKey(uniqueKey),
@@ -381,7 +501,8 @@ class _GoogleMapsScreenState extends State<GoogleMapsScreen> {
                     ],
                   ),
                   child: Icon(
-                    _nearbyPlaceTypes.firstWhere((p) => p['type'] == placeType)['icon'],
+                    _nearbyPlaceTypes
+                        .firstWhere((p) => p['type'] == placeType)['icon'],
                     color: Colors.white,
                     size: 20,
                   ),
@@ -390,10 +511,11 @@ class _GoogleMapsScreenState extends State<GoogleMapsScreen> {
             ),
           );
         }
-        
+
         if (places.isNotEmpty) {
           final firstPlace = places.first;
-          _mapController.move(ll.LatLng(firstPlace['lat'], firstPlace['lng']), 14.0);
+          _mapController.move(
+              ll.LatLng(firstPlace['lat'], firstPlace['lng']), 14.0);
         }
       }
     });
@@ -403,20 +525,20 @@ class _GoogleMapsScreenState extends State<GoogleMapsScreen> {
     setState(() {
       _isNearbyPlacesVisible = false;
       _selectedPlaceType = null;
-      _markers.removeWhere((m) => 
-        m.key.toString().contains('nearby_')
-      );
+      _markers.removeWhere((m) => m.key.toString().contains('nearby_'));
     });
   }
 
-  void _showPlaceInfo(Map<String, dynamic> place, String placeType, Color color) {
+  void _showPlaceInfo(
+      Map<String, dynamic> place, String placeType, Color color) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
         title: Row(
           children: [
             Icon(
-              _nearbyPlaceTypes.firstWhere((p) => p['type'] == placeType)['icon'],
+              _nearbyPlaceTypes
+                  .firstWhere((p) => p['type'] == placeType)['icon'],
               color: color,
             ),
             const SizedBox(width: 8),
@@ -437,8 +559,10 @@ class _GoogleMapsScreenState extends State<GoogleMapsScreen> {
               ],
             ),
             const Divider(),
-            const Text('📍 OpenStreetMap Nominatim', style: TextStyle(fontSize: 12, color: Colors.green)),
-            const Text('✅ Free Geocoding - No API Key', style: TextStyle(fontSize: 12, color: Colors.green)),
+            const Text('📍 OpenStreetMap Nominatim',
+                style: TextStyle(fontSize: 12, color: Colors.green)),
+            const Text('✅ Free Geocoding - No API Key',
+                style: TextStyle(fontSize: 12, color: Colors.green)),
           ],
         ),
         actions: [
@@ -471,7 +595,8 @@ class _GoogleMapsScreenState extends State<GoogleMapsScreen> {
           width: 40,
           height: 40,
           child: GestureDetector(
-            onTap: () => _setDestinationFromLandmark(_kigaliCenter, 'Kigali City Center'),
+            onTap: () => _setDestinationFromLandmark(
+                _kigaliCenter, 'Kigali City Center'),
             child: Container(
               decoration: BoxDecoration(
                 color: const Color(0xFF00A1DE),
@@ -479,13 +604,14 @@ class _GoogleMapsScreenState extends State<GoogleMapsScreen> {
                 border: Border.all(color: Colors.white, width: 2),
                 boxShadow: [
                   BoxShadow(
-                    color: const Color(0xFF00A1DE).withOpacity(0.5),
+                    color: const Color(0xFF00A1DE).withValues(alpha: 0.5),
                     blurRadius: 8,
                     spreadRadius: 2,
                   ),
                 ],
               ),
-              child: const Icon(Icons.location_city, color: Colors.white, size: 20),
+              child: const Icon(Icons.location_city,
+                  color: Colors.white, size: 20),
             ),
           ),
         ),
@@ -495,7 +621,8 @@ class _GoogleMapsScreenState extends State<GoogleMapsScreen> {
           width: 40,
           height: 40,
           child: GestureDetector(
-            onTap: () => _setDestinationFromLandmark(const ll.LatLng(-1.9501, 30.0588), 'BK Arena'),
+            onTap: () => _setDestinationFromLandmark(
+                const ll.LatLng(-1.9501, 30.0588), 'BK Arena'),
             child: Container(
               decoration: BoxDecoration(
                 color: const Color(0xFF20603D),
@@ -503,13 +630,14 @@ class _GoogleMapsScreenState extends State<GoogleMapsScreen> {
                 border: Border.all(color: Colors.white, width: 2),
                 boxShadow: [
                   BoxShadow(
-                    color: const Color(0xFF20603D).withOpacity(0.5),
+                    color: const Color(0xFF20603D).withValues(alpha: 0.5),
                     blurRadius: 8,
                     spreadRadius: 2,
                   ),
                 ],
               ),
-              child: const Icon(Icons.sports_basketball, color: Colors.white, size: 20),
+              child: const Icon(Icons.sports_basketball,
+                  color: Colors.white, size: 20),
             ),
           ),
         ),
@@ -519,7 +647,8 @@ class _GoogleMapsScreenState extends State<GoogleMapsScreen> {
           width: 40,
           height: 40,
           child: GestureDetector(
-            onTap: () => _setDestinationFromLandmark(const ll.LatLng(-1.9393, 30.0475), 'Kigali Convention Centre'),
+            onTap: () => _setDestinationFromLandmark(
+                const ll.LatLng(-1.9393, 30.0475), 'Kigali Convention Centre'),
             child: Container(
               decoration: BoxDecoration(
                 color: const Color(0xFFE1BD00),
@@ -527,7 +656,7 @@ class _GoogleMapsScreenState extends State<GoogleMapsScreen> {
                 border: Border.all(color: Colors.white, width: 2),
                 boxShadow: [
                   BoxShadow(
-                    color: const Color(0xFFE1BD00).withOpacity(0.5),
+                    color: const Color(0xFFE1BD00).withValues(alpha: 0.5),
                     blurRadius: 8,
                     spreadRadius: 2,
                   ),
@@ -543,7 +672,9 @@ class _GoogleMapsScreenState extends State<GoogleMapsScreen> {
           width: 40,
           height: 40,
           child: GestureDetector(
-            onTap: () => _setDestinationFromLandmark(const ll.LatLng(-1.9686, 30.1145), 'Kigali International Airport'),
+            onTap: () => _setDestinationFromLandmark(
+                const ll.LatLng(-1.9686, 30.1145),
+                'Kigali International Airport'),
             child: Container(
               decoration: BoxDecoration(
                 color: Colors.purple,
@@ -551,7 +682,7 @@ class _GoogleMapsScreenState extends State<GoogleMapsScreen> {
                 border: Border.all(color: Colors.white, width: 2),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.purple.withOpacity(0.5),
+                    color: Colors.purple.withValues(alpha: 0.5),
                     blurRadius: 8,
                     spreadRadius: 2,
                   ),
@@ -581,7 +712,7 @@ class _GoogleMapsScreenState extends State<GoogleMapsScreen> {
       _polylines.clear();
       _searchResults = [];
     });
-    
+
     _addDestinationMarker();
     _mapController.move(_destinationPosition!, 15.0);
     _showSnackBar('📍 Destination set', Colors.green);
@@ -600,7 +731,7 @@ class _GoogleMapsScreenState extends State<GoogleMapsScreen> {
       _searchResults = [];
       _markers.removeWhere((m) => m.key == const ValueKey('destination'));
     });
-    
+
     if (_currentPosition != null) {
       _mapController.move(_currentPosition!, _currentZoom);
     }
@@ -619,43 +750,43 @@ class _GoogleMapsScreenState extends State<GoogleMapsScreen> {
     });
 
     try {
-      final String profile = _travelMode == 'walking' ? 'foot' : 
-                            _travelMode == 'cycling' ? 'bike' : 'driving';
-      
-      final url = Uri.parse(
-        'http://router.project-osrm.org/route/v1/$profile/'
-        '${_currentPosition!.longitude},${_currentPosition!.latitude};'
-        '${_destinationPosition!.longitude},${_destinationPosition!.latitude}'
-        '?overview=full&geometries=geojson&steps=true&alternatives=true'
-      );
+      final String profile = _travelMode == 'walking'
+          ? 'foot'
+          : _travelMode == 'cycling'
+              ? 'bike'
+              : 'driving';
+
+      final url = Uri.parse('http://router.project-osrm.org/route/v1/$profile/'
+          '${_currentPosition!.longitude},${_currentPosition!.latitude};'
+          '${_destinationPosition!.longitude},${_destinationPosition!.latitude}'
+          '?overview=full&geometries=geojson&steps=true&alternatives=true');
 
       final response = await http.get(url);
-      
+
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
-        
+
         if (data['code'] == 'Ok') {
           final List<dynamic> routes = data['routes'];
-          
+
           _polylines.clear();
-          
+
           for (int i = 0; i < routes.length; i++) {
             final route = routes[i];
             final geometry = route['geometry'];
             final distance = route['distance'] / 1000;
             final duration = route['duration'] / 60;
-            
+
             List<ll.LatLng> points = [];
             for (var coord in geometry['coordinates']) {
               points.add(ll.LatLng(coord[1], coord[0]));
             }
-            
-            Color routeColor = i == 0 
-                ? const Color(0xFF00A1DE)
-                : Colors.grey.shade400;
-            
+
+            Color routeColor =
+                i == 0 ? const Color(0xFF00A1DE) : Colors.grey.shade400;
+
             double strokeWidth = i == 0 ? 6.0 : 4.0;
-            
+
             _polylines.add(
               Polyline(
                 points: points,
@@ -665,11 +796,11 @@ class _GoogleMapsScreenState extends State<GoogleMapsScreen> {
                 borderStrokeWidth: i == 0 ? 2.0 : 0.0,
               ),
             );
-            
+
             if (i == 0) {
               _totalDistance = distance;
               _totalDuration = duration;
-              
+
               if (route['legs'] != null && route['legs'].isNotEmpty) {
                 final leg = route['legs'][0];
                 if (leg['steps'] != null) {
@@ -678,15 +809,14 @@ class _GoogleMapsScreenState extends State<GoogleMapsScreen> {
               }
             }
           }
-          
+
           setState(() => _isLoading = false);
-          
+
           _showSnackBar(
             '✅ Best route: ${_totalDistance.toStringAsFixed(1)} km, '
             '${_totalDuration.toStringAsFixed(0)} min',
             Colors.green,
           );
-          
         } else {
           throw Exception('Routing failed');
         }
@@ -696,35 +826,44 @@ class _GoogleMapsScreenState extends State<GoogleMapsScreen> {
     } catch (e) {
       setState(() => _isLoading = false);
       _offlineRoute();
-      print('Routing error: $e');
+      debugPrint('Routing error: $e');
     }
   }
 
   String _getRouteSummary(List<dynamic> steps) {
     if (steps.isEmpty) return '';
-    
+
     final firstStep = steps[0];
     String instruction = firstStep['maneuver']?['type'] ?? '';
     String modifier = firstStep['maneuver']?['modifier'] ?? '';
-    
+
     if (instruction == 'depart') {
       return 'Head ${_getDirectionText(modifier)}';
     }
-    
+
     return _capitalize('$instruction $modifier');
   }
 
   String _getDirectionText(String modifier) {
     switch (modifier) {
-      case 'north': return 'North';
-      case 'south': return 'South';
-      case 'east': return 'East';
-      case 'west': return 'West';
-      case 'northeast': return 'Northeast';
-      case 'northwest': return 'Northwest';
-      case 'southeast': return 'Southeast';
-      case 'southwest': return 'Southwest';
-      default: return modifier;
+      case 'north':
+        return 'North';
+      case 'south':
+        return 'South';
+      case 'east':
+        return 'East';
+      case 'west':
+        return 'West';
+      case 'northeast':
+        return 'Northeast';
+      case 'northwest':
+        return 'Northwest';
+      case 'southeast':
+        return 'Southeast';
+      case 'southwest':
+        return 'Southwest';
+      default:
+        return modifier;
     }
   }
 
@@ -735,23 +874,28 @@ class _GoogleMapsScreenState extends State<GoogleMapsScreen> {
 
   void _offlineRoute() {
     if (_currentPosition == null || _destinationPosition == null) return;
-    
+
     setState(() {
       _polylines.clear();
       _polylines.add(
         Polyline(
           points: [_currentPosition!, _destinationPosition!],
-          color: const Color(0xFF00A1DE).withOpacity(0.7),
+          color: const Color(0xFF00A1DE).withValues(alpha: 0.7),
           strokeWidth: 4.0,
         ),
       );
-      
-      _totalDistance = _calculateDistance(_currentPosition!, _destinationPosition!);
-      _totalDuration = _totalDistance * (_travelMode == 'walking' ? 12 : 
-                      _travelMode == 'cycling' ? 4 : 2);
+
+      _totalDistance =
+          _calculateDistance(_currentPosition!, _destinationPosition!);
+      _totalDuration = _totalDistance *
+          (_travelMode == 'walking'
+              ? 12
+              : _travelMode == 'cycling'
+                  ? 4
+                  : 2);
       _routeSummary = 'Offline route (direct line)';
     });
-    
+
     _showSnackBar('📍 Offline mode - direct line', Colors.orange);
   }
 
@@ -763,10 +907,9 @@ class _GoogleMapsScreenState extends State<GoogleMapsScreen> {
     final deltaLng = (end.longitude - start.longitude) * pi / 180;
 
     final a = sin(deltaLat / 2) * sin(deltaLat / 2) +
-        cos(lat1) * cos(lat2) *
-        sin(deltaLng / 2) * sin(deltaLng / 2);
+        cos(lat1) * cos(lat2) * sin(deltaLng / 2) * sin(deltaLng / 2);
     final c = 2 * atan2(sqrt(a), sqrt(1 - a));
-    
+
     return R * c;
   }
 
@@ -810,8 +953,10 @@ class _GoogleMapsScreenState extends State<GoogleMapsScreen> {
         title: const Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('🗺️ Free Maps - Rwanda', style: TextStyle(fontWeight: FontWeight.bold)),
-            Text('Live Location • Free Geocoding', style: TextStyle(fontSize: 12)),
+            Text('🗺️ Free Maps - Rwanda',
+                style: TextStyle(fontWeight: FontWeight.bold)),
+            Text('Live Location • Free Geocoding',
+                style: TextStyle(fontSize: 12)),
           ],
         ),
         backgroundColor: const Color(0xFF00A1DE),
@@ -859,10 +1004,11 @@ class _GoogleMapsScreenState extends State<GoogleMapsScreen> {
                   CurrentLocationLayer(
                     style: LocationMarkerStyle(
                       marker: const DefaultLocationMarker(
-                        child: Icon(Icons.navigation, color: Colors.white, size: 16),
+                        child: Icon(Icons.navigation,
+                            color: Colors.white, size: 16),
                       ),
                       markerSize: const Size(40, 40),
-                      accuracyCircleColor: Colors.blue.withOpacity(0.1),
+                      accuracyCircleColor: Colors.blue.withValues(alpha: 0.1),
                     ),
                   ),
               ],
@@ -891,7 +1037,7 @@ class _GoogleMapsScreenState extends State<GoogleMapsScreen> {
                     borderRadius: BorderRadius.circular(8),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.2),
+                        color: Colors.black.withValues(alpha: 0.2),
                         blurRadius: 4,
                         spreadRadius: 1,
                       ),
@@ -946,7 +1092,8 @@ class _GoogleMapsScreenState extends State<GoogleMapsScreen> {
                                   height: 20,
                                   child: Padding(
                                     padding: EdgeInsets.all(12),
-                                    child: CircularProgressIndicator(strokeWidth: 2),
+                                    child: CircularProgressIndicator(
+                                        strokeWidth: 2),
                                   ),
                                 )
                               : null,
@@ -965,7 +1112,7 @@ class _GoogleMapsScreenState extends State<GoogleMapsScreen> {
                       borderRadius: BorderRadius.circular(16),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withOpacity(0.2),
+                          color: Colors.black.withValues(alpha: 0.2),
                           blurRadius: 8,
                           spreadRadius: 2,
                         ),
@@ -979,13 +1126,19 @@ class _GoogleMapsScreenState extends State<GoogleMapsScreen> {
                         final result = _searchResults[index];
                         return ListTile(
                           leading: Icon(
-                            result['type'] == 'city' ? Icons.location_city :
-                            result['type'] == 'restaurant' ? Icons.restaurant :
-                            result['type'] == 'hotel' ? Icons.hotel :
-                            result['type'] == 'hospital' ? Icons.local_hospital :
-                            result['type'] == 'cafe' ? Icons.local_cafe :
-                            result['type'] == 'bar' ? Icons.local_bar :
-                            Icons.place,
+                            result['type'] == 'city'
+                                ? Icons.location_city
+                                : result['type'] == 'restaurant'
+                                    ? Icons.restaurant
+                                    : result['type'] == 'hotel'
+                                        ? Icons.hotel
+                                        : result['type'] == 'hospital'
+                                            ? Icons.local_hospital
+                                            : result['type'] == 'cafe'
+                                                ? Icons.local_cafe
+                                                : result['type'] == 'bar'
+                                                    ? Icons.local_bar
+                                                    : Icons.place,
                             color: Colors.blue,
                           ),
                           title: Text(
@@ -994,7 +1147,11 @@ class _GoogleMapsScreenState extends State<GoogleMapsScreen> {
                             overflow: TextOverflow.ellipsis,
                           ),
                           subtitle: Text(
-                            result['display_name'].toString().split(',').skip(1).join(','),
+                            result['display_name']
+                                .toString()
+                                .split(',')
+                                .skip(1)
+                                .join(','),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),
@@ -1018,7 +1175,7 @@ class _GoogleMapsScreenState extends State<GoogleMapsScreen> {
                 borderRadius: BorderRadius.circular(30),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.2),
+                    color: Colors.black.withValues(alpha: 0.2),
                     blurRadius: 4,
                     spreadRadius: 1,
                   ),
@@ -1031,55 +1188,63 @@ class _GoogleMapsScreenState extends State<GoogleMapsScreen> {
                     padding: EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                     child: Text(
                       'Nearby Places',
-                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                      style:
+                          TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
                     ),
                   ),
                   const Divider(height: 1),
                   ..._nearbyPlaceTypes.map((place) => InkWell(
-                    onTap: () => _toggleNearbyPlaces(place['type']),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                      decoration: BoxDecoration(
-                        color: _selectedPlaceType == place['type'] && _isNearbyPlacesVisible
-                            ? place['color'].withOpacity(0.1)
-                            : Colors.transparent,
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(
-                            place['icon'],
-                            color: _selectedPlaceType == place['type'] && _isNearbyPlacesVisible
-                                ? place['color'] 
-                                : Colors.grey,
-                            size: 20,
+                        onTap: () => _toggleNearbyPlaces(place['type']),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: _selectedPlaceType == place['type'] &&
+                                    _isNearbyPlacesVisible
+                                ? place['color'].withOpacity(0.1)
+                                : Colors.transparent,
+                            borderRadius: BorderRadius.circular(20),
                           ),
-                          const SizedBox(width: 8),
-                          Text(
-                            place['label'],
-                            style: TextStyle(
-                              color: _selectedPlaceType == place['type'] && _isNearbyPlacesVisible
-                                  ? place['color'] 
-                                  : Colors.grey,
-                              fontWeight: _selectedPlaceType == place['type'] && _isNearbyPlacesVisible
-                                  ? FontWeight.bold 
-                                  : FontWeight.normal,
-                              fontSize: 12,
-                            ),
-                          ),
-                          if (_selectedPlaceType == place['type'] && _isNearbyPlacesVisible)
-                            Padding(
-                              padding: const EdgeInsets.only(left: 4),
-                              child: Icon(
-                                Icons.check,
-                                color: place['color'],
-                                size: 16,
+                          child: Row(
+                            children: [
+                              Icon(
+                                place['icon'],
+                                color: _selectedPlaceType == place['type'] &&
+                                        _isNearbyPlacesVisible
+                                    ? place['color']
+                                    : Colors.grey,
+                                size: 20,
                               ),
-                            ),
-                        ],
-                      ),
-                    ),
-                  )),
+                              const SizedBox(width: 8),
+                              Text(
+                                place['label'],
+                                style: TextStyle(
+                                  color: _selectedPlaceType == place['type'] &&
+                                          _isNearbyPlacesVisible
+                                      ? place['color']
+                                      : Colors.grey,
+                                  fontWeight:
+                                      _selectedPlaceType == place['type'] &&
+                                              _isNearbyPlacesVisible
+                                          ? FontWeight.bold
+                                          : FontWeight.normal,
+                                  fontSize: 12,
+                                ),
+                              ),
+                              if (_selectedPlaceType == place['type'] &&
+                                  _isNearbyPlacesVisible)
+                                Padding(
+                                  padding: const EdgeInsets.only(left: 4),
+                                  child: Icon(
+                                    Icons.check,
+                                    color: place['color'],
+                                    size: 16,
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                      )),
                 ],
               ),
             ),
@@ -1096,7 +1261,7 @@ class _GoogleMapsScreenState extends State<GoogleMapsScreen> {
                   borderRadius: BorderRadius.circular(30),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.2),
+                      color: Colors.black.withValues(alpha: 0.2),
                       blurRadius: 4,
                       spreadRadius: 1,
                     ),
@@ -1113,9 +1278,12 @@ class _GoogleMapsScreenState extends State<GoogleMapsScreen> {
                         }
                       },
                       child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 12),
                         decoration: BoxDecoration(
-                          color: isSelected ? mode['color'].withOpacity(0.1) : Colors.transparent,
+                          color: isSelected
+                              ? mode['color'].withOpacity(0.1)
+                              : Colors.transparent,
                           borderRadius: BorderRadius.circular(30),
                         ),
                         child: Row(
@@ -1130,7 +1298,9 @@ class _GoogleMapsScreenState extends State<GoogleMapsScreen> {
                               mode['label'],
                               style: TextStyle(
                                 color: isSelected ? mode['color'] : Colors.grey,
-                                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                                fontWeight: isSelected
+                                    ? FontWeight.bold
+                                    : FontWeight.normal,
                                 fontSize: 12,
                               ),
                             ),
@@ -1172,7 +1342,7 @@ class _GoogleMapsScreenState extends State<GoogleMapsScreen> {
                           Container(
                             padding: const EdgeInsets.all(8),
                             decoration: BoxDecoration(
-                              color: Colors.blue.withOpacity(0.1),
+                              color: Colors.blue.withValues(alpha: 0.1),
                               shape: BoxShape.circle,
                             ),
                             child: const Icon(Icons.route, color: Colors.blue),
@@ -1202,7 +1372,8 @@ class _GoogleMapsScreenState extends State<GoogleMapsScreen> {
                             ),
                           ),
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 6),
                             decoration: BoxDecoration(
                               color: Colors.green,
                               borderRadius: BorderRadius.circular(20),
@@ -1210,7 +1381,8 @@ class _GoogleMapsScreenState extends State<GoogleMapsScreen> {
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                const Icon(Icons.timer, color: Colors.white, size: 16),
+                                const Icon(Icons.timer,
+                                    color: Colors.white, size: 16),
                                 const SizedBox(width: 4),
                                 Text(
                                   '${_totalDuration.toStringAsFixed(0)} min',
@@ -1236,12 +1408,15 @@ class _GoogleMapsScreenState extends State<GoogleMapsScreen> {
                           _buildRouteInfoItem(
                             Icons.directions,
                             'Travel Mode',
-                            _travelModes.firstWhere((m) => m['mode'] == _travelMode)['label'],
+                            _travelModes.firstWhere(
+                                (m) => m['mode'] == _travelMode)['label'],
                           ),
                           _buildRouteInfoItem(
                             Icons.info_outline,
                             'Summary',
-                            _routeSummary.isNotEmpty ? _routeSummary : 'Route ready',
+                            _routeSummary.isNotEmpty
+                                ? _routeSummary
+                                : 'Route ready',
                           ),
                         ],
                       ),
@@ -1249,7 +1424,8 @@ class _GoogleMapsScreenState extends State<GoogleMapsScreen> {
                         const Divider(height: 24),
                         Row(
                           children: [
-                            const Icon(Icons.lightbulb, color: Colors.amber, size: 20),
+                            const Icon(Icons.lightbulb,
+                                color: Colors.amber, size: 20),
                             const SizedBox(width: 8),
                             Expanded(
                               child: Text(

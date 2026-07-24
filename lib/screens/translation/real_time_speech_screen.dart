@@ -17,7 +17,7 @@ import '../../core/constants/languages.dart';
 // =============================================================================
 
 class RealTimeSpeechScreen extends StatefulWidget {
-  const RealTimeSpeechScreen({Key? key}) : super(key: key);
+  const RealTimeSpeechScreen({super.key});
 
   @override
   State<RealTimeSpeechScreen> createState() => _RealTimeSpeechScreenState();
@@ -278,9 +278,11 @@ class _RealTimeSpeechScreenState extends State<RealTimeSpeechScreen>
         }
       },
       localeId: _getLocaleFromLanguage(_sourceLanguage),
-      listenMode: stt.ListenMode.dictation,
-      partialResults: true,
-      cancelOnError: false,
+      listenOptions: stt.SpeechListenOptions(
+        listenMode: stt.ListenMode.dictation,
+        partialResults: true,
+        cancelOnError: false,
+      ),
       listenFor: const Duration(seconds: 30),
       pauseFor: const Duration(seconds: 5),
     );
@@ -336,7 +338,12 @@ class _RealTimeSpeechScreenState extends State<RealTimeSpeechScreen>
 
       request.fields['source_language'] = _sourceLanguage;
       request.fields['target_language'] = _targetLanguage;
-      request.files.add(http.MultipartFile.fromBytes('audio', result.files.single.bytes!, filename: result.files.single.name,),
+      request.files.add(
+        http.MultipartFile.fromBytes(
+          'audio',
+          result.files.single.bytes!,
+          filename: result.files.single.name,
+        ),
       );
 
       final streamedResponse = await request.send();
@@ -542,7 +549,7 @@ class _RealTimeSpeechScreenState extends State<RealTimeSpeechScreen>
                     }
                   },
                   selectedColor: Colors.white,
-                  backgroundColor: Colors.white.withOpacity(0.2),
+                  backgroundColor: Colors.white.withValues(alpha: 0.2),
                   labelStyle: const TextStyle(color: Colors.white),
                 ),
               ),
@@ -562,7 +569,7 @@ class _RealTimeSpeechScreenState extends State<RealTimeSpeechScreen>
                     if (selected) _pickAudioFile();
                   },
                   selectedColor: Colors.white,
-                  backgroundColor: Colors.white.withOpacity(0.2),
+                  backgroundColor: Colors.white.withValues(alpha: 0.2),
                   labelStyle: const TextStyle(color: Colors.white),
                 ),
               ),
@@ -768,9 +775,9 @@ class _RealTimeSpeechScreenState extends State<RealTimeSpeechScreen>
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     color: _isListening
-                        ? Colors.red.withOpacity(
-                            0.3 - (_animationController.value * 0.1))
-                        : Colors.blue.withOpacity(0.1),
+                        ? Colors.red.withValues(
+                            alpha: 0.3 - (_animationController.value * 0.1))
+                        : Colors.blue.withValues(alpha: 0.1),
                   ),
                   child: Center(
                     child: Container(
@@ -782,7 +789,7 @@ class _RealTimeSpeechScreenState extends State<RealTimeSpeechScreen>
                         boxShadow: [
                           BoxShadow(
                             color: (_isListening ? Colors.red : Colors.blue)
-                                .withOpacity(0.3),
+                                .withValues(alpha: 0.3),
                             blurRadius: 20,
                             spreadRadius: 5,
                           ),

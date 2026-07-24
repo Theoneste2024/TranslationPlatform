@@ -7,12 +7,12 @@ class VoiceCommandListener extends StatefulWidget {
   final VoidCallback onStop;
 
   const VoiceCommandListener({
-    Key? key,
+    super.key,
     required this.onCommand,
     required this.isListening,
     required this.onStart,
     required this.onStop,
-  }) : super(key: key);
+  });
 
   @override
   State<VoiceCommandListener> createState() => _VoiceCommandListenerState();

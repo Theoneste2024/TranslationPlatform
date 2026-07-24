@@ -1,18 +1,12 @@
-import 'dart:math'; // ✅ Added for future distance calculations
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:flutter_map/flutter_map.dart'; // ✅ FREE OSM - NO API KEY
 import 'package:latlong2/latlong.dart'; // ✅ FREE coordinates
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 import 'package:flutter_tts/flutter_tts.dart';
-import '../../core/constants/languages.dart';
-import '../../providers/motorist_provider.dart';
-import '../../widgets/motorist/hands_free_button.dart';
-import '../../widgets/motorist/voice_command_listener.dart';
 
 class MotoristModeScreen extends StatefulWidget {
-  const MotoristModeScreen({Key? key}) : super(key: key);
+  const MotoristModeScreen({super.key});
 
   @override
   State<MotoristModeScreen> createState() => _MotoristModeScreenState();
@@ -24,16 +18,16 @@ class _MotoristModeScreenState extends State<MotoristModeScreen>
   late FlutterTts _flutterTts;
   bool _isListening = false;
   bool _isNavigating = false;
-  
+
   // ✅ FREE OpenStreetMap controller
   final MapController _mapController = MapController();
-  
+
   // ✅ Use LatLng from latlong2 package
   LatLng? _currentPosition;
-  
+
   // ✅ Use flutter_map Marker (not Google Maps Marker)
   final List<Marker> _markers = [];
-  
+
   // Voice commands for motorists
   final List<String> _voiceCommands = [
     'translate',
@@ -105,7 +99,7 @@ class _MotoristModeScreenState extends State<MotoristModeScreen>
       });
       _mapController.move(_currentPosition!, 15.0);
     } catch (e) {
-      print('Error getting location: $e');
+      debugPrint('Error getting location: $e');
     }
   }
 
@@ -124,7 +118,7 @@ class _MotoristModeScreenState extends State<MotoristModeScreen>
             border: Border.all(color: Colors.white, width: 2),
             boxShadow: [
               BoxShadow(
-                color: Colors.blue.withOpacity(0.5),
+                color: Colors.blue.withValues(alpha: 0.5),
                 blurRadius: 8,
                 spreadRadius: 2,
               ),
@@ -139,7 +133,7 @@ class _MotoristModeScreenState extends State<MotoristModeScreen>
   void _startContinuousListening() async {
     bool available = await _speech.initialize(
       onStatus: (status) {
-        print('Speech status: $status');
+        debugPrint('Speech status: $status');
         if (status == 'done' || status == 'notListening') {
           Future.delayed(const Duration(milliseconds: 500), () {
             if (mounted) {
@@ -148,7 +142,7 @@ class _MotoristModeScreenState extends State<MotoristModeScreen>
           });
         }
       },
-      onError: (error) => print('Speech error: $error'),
+      onError: (error) => debugPrint('Speech error: $error'),
     );
 
     if (available) {
@@ -157,21 +151,24 @@ class _MotoristModeScreenState extends State<MotoristModeScreen>
         onResult: (result) => _processVoiceCommand(result.recognizedWords),
         listenFor: const Duration(hours: 1),
         pauseFor: const Duration(seconds: 3),
-        partialResults: true,
         localeId: 'rw_RW',
-        cancelOnError: false,
+        listenOptions: stt.SpeechListenOptions(
+          partialResults: true,
+          cancelOnError: false,
+        ),
       );
     }
   }
 
   void _processVoiceCommand(String command) {
     command = command.toLowerCase();
-    
+
     _flutterTts.speak('Received command');
 
     if (command.contains('translate')) {
       _handleTranslationCommand(command);
-    } else if (command.contains('navigate to') || command.contains('where is')) {
+    } else if (command.contains('navigate to') ||
+        command.contains('where is')) {
       _handleNavigationCommand(command);
     } else if (command.contains('how much')) {
       _handleFareCalculation();
@@ -184,7 +181,7 @@ class _MotoristModeScreenState extends State<MotoristModeScreen>
 
   void _handleTranslationCommand(String command) {
     String textToTranslate = command.replaceAll('translate', '').trim();
-    
+
     if (textToTranslate.isNotEmpty) {
       _flutterTts.speak('Ibyo muvuga bivuze: $textToTranslate');
       _flutterTts.setLanguage('en');
@@ -194,16 +191,14 @@ class _MotoristModeScreenState extends State<MotoristModeScreen>
   }
 
   void _handleNavigationCommand(String command) {
-    String destination = command
-        .replaceAll('navigate to', '')
-        .replaceAll('where is', '')
-        .trim();
-    
+    String destination =
+        command.replaceAll('navigate to', '').replaceAll('where is', '').trim();
+
     _flutterTts.speak('Navigating to $destination');
     setState(() {
       _isNavigating = true;
     });
-    
+
     _addDestinationMarker(destination);
   }
 
@@ -241,7 +236,8 @@ class _MotoristModeScreenState extends State<MotoristModeScreen>
                 shape: BoxShape.circle,
                 border: Border.all(color: Colors.white, width: 2),
               ),
-              child: const Icon(Icons.location_on, color: Colors.white, size: 20),
+              child:
+                  const Icon(Icons.location_on, color: Colors.white, size: 20),
             ),
           ),
         );
@@ -251,9 +247,6 @@ class _MotoristModeScreenState extends State<MotoristModeScreen>
 
   @override
   Widget build(BuildContext context) {
-    final motoristProvider = Provider.of<MotoristProvider>(context);
-    final size = MediaQuery.of(context).size;
-
     return Scaffold(
       backgroundColor: Colors.black,
       body: Stack(
@@ -289,7 +282,7 @@ class _MotoristModeScreenState extends State<MotoristModeScreen>
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: Colors.black.withOpacity(0.8),
+                    color: Colors.black.withValues(alpha: 0.8),
                     borderRadius: const BorderRadius.only(
                       bottomLeft: Radius.circular(20),
                       bottomRight: Radius.circular(20),
@@ -314,7 +307,7 @@ class _MotoristModeScreenState extends State<MotoristModeScreen>
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(
+                            const Text(
                               'Motorist Mode Active',
                               style: TextStyle(
                                 color: Colors.white,
@@ -326,7 +319,7 @@ class _MotoristModeScreenState extends State<MotoristModeScreen>
                               _isListening
                                   ? 'Listening for commands...'
                                   : 'Tap to activate',
-                              style: TextStyle(
+                              style: const TextStyle(
                                 color: Colors.white70,
                                 fontSize: 12,
                               ),
@@ -335,7 +328,8 @@ class _MotoristModeScreenState extends State<MotoristModeScreen>
                         ),
                       ),
                       IconButton(
-                        icon: const Icon(Icons.settings_voice, color: Colors.white),
+                        icon: const Icon(Icons.settings_voice,
+                            color: Colors.white),
                         onPressed: _showVoiceCommands,
                       ),
                     ],
@@ -348,7 +342,7 @@ class _MotoristModeScreenState extends State<MotoristModeScreen>
                 Container(
                   padding: const EdgeInsets.all(20),
                   decoration: BoxDecoration(
-                    color: Colors.black.withOpacity(0.9),
+                    color: Colors.black.withValues(alpha: 0.9),
                     borderRadius: const BorderRadius.only(
                       topLeft: Radius.circular(30),
                       topRight: Radius.circular(30),
@@ -363,7 +357,8 @@ class _MotoristModeScreenState extends State<MotoristModeScreen>
                             icon: Icons.translate,
                             label: 'Translate',
                             onTap: () {
-                              _flutterTts.speak('Say what you want to translate');
+                              _flutterTts
+                                  .speak('Say what you want to translate');
                             },
                           ),
                           _buildQuickActionButton(
@@ -385,9 +380,7 @@ class _MotoristModeScreenState extends State<MotoristModeScreen>
                           ),
                         ],
                       ),
-                      
                       const SizedBox(height: 20),
-                      
                       Container(
                         padding: const EdgeInsets.all(16),
                         decoration: BoxDecoration(
@@ -420,7 +413,7 @@ class _MotoristModeScreenState extends State<MotoristModeScreen>
                                     _isNavigating
                                         ? 'Follow the route'
                                         : 'Tap to start navigation',
-                                    style: TextStyle(
+                                    style: const TextStyle(
                                       color: Colors.white70,
                                       fontSize: 12,
                                     ),
@@ -492,18 +485,19 @@ class _MotoristModeScreenState extends State<MotoristModeScreen>
             ),
             const SizedBox(height: 20),
             ..._voiceCommands.map((command) => Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: Row(
-                children: [
-                  Icon(Icons.mic, color: Colors.green, size: 20),
-                  const SizedBox(width: 12),
-                  Text(
-                    '"$command"',
-                    style: const TextStyle(color: Colors.white, fontSize: 16),
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.mic, color: Colors.green, size: 20),
+                      const SizedBox(width: 12),
+                      Text(
+                        '"$command"',
+                        style:
+                            const TextStyle(color: Colors.white, fontSize: 16),
+                      ),
+                    ],
                   ),
-                ],
-              ),
-            )),
+                )),
           ],
         ),
       ),
