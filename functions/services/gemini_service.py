@@ -19,12 +19,18 @@ os.environ.setdefault("MKL_NUM_THREADS", "1")
 os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
 os.environ.setdefault("KMP_INIT_AT_FORK", "FALSE")
 
+# Use a project-local Hugging Face cache to avoid Windows permission issues.
+cache_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "cache", "huggingface")
+os.makedirs(cache_dir, exist_ok=True)
+os.environ.setdefault("HF_HUB_CACHE", cache_dir)
+os.environ.setdefault("HF_HOME", cache_dir)
+
 try:
     from faster_whisper import WhisperModel
 except ImportError:
     WhisperModel = None
 
-client = genai.Client(api_key=GEMINI_API_KEY)
+client = None
 
 _whisper_model = None
 
@@ -151,6 +157,59 @@ def get_language_name(language):
     )
 
 
+def _get_genai_client():
+    global client
+    if client is not None:
+        return client
+    if not GEMINI_API_KEY:
+        return None
+    try:
+        client = genai.Client(api_key=GEMINI_API_KEY)
+        return client
+    except Exception as e:
+        print(f"Gemini client initialization failed: {e}")
+        return None
+
+
+def _is_chunk_file_ready(chunk_path, min_size_bytes=16000, stability_window_seconds=0.5):
+    """Return True only when a chunk file exists, is large enough, has stopped changing, and looks like valid audio."""
+    if not chunk_path or not os.path.exists(chunk_path):
+        return False
+
+    try:
+        file_size = os.path.getsize(chunk_path)
+        if file_size < min_size_bytes:
+            return False
+
+        deadline = time.time() + stability_window_seconds
+        while time.time() < deadline:
+            if os.path.getsize(chunk_path) >= min_size_bytes:
+                try:
+                    mtime = os.path.getmtime(chunk_path)
+                    if time.time() - mtime >= stability_window_seconds:
+                        break
+                except OSError:
+                    pass
+            time.sleep(0.1)
+
+        try:
+            result = subprocess.run(
+                ["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "default=nw=1:nk=1", chunk_path],
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
+            if result.returncode != 0:
+                return False
+
+            duration = float(result.stdout.strip() or "0")
+            return duration > 0.1
+        except (FileNotFoundError, ValueError, subprocess.TimeoutExpired):
+            return True
+    except OSError:
+        return False
+
+
 def get_speech_language_code(language):
     normalized_language = normalize_language(language)
 
@@ -244,7 +303,11 @@ def translate_text(text, target_lang):
     )
     prompt = build_platform_prompt(task_instruction, text)
 
-    response = client.models.generate_content(
+    gemini_client = _get_genai_client()
+    if gemini_client is None:
+        raise Exception("Gemini API key not configured")
+
+    response = gemini_client.models.generate_content(
         model="gemini-2.5-flash-lite",
         contents=prompt
     )
@@ -970,10 +1033,52 @@ def summarize_video(video_path, source_lang, model=None):
 
 
 def _convert_to_wav(input_path, output_path):
-    audio = AudioSegment.from_file(input_path)
-    audio = audio.set_channels(1)
-    audio = audio.set_frame_rate(16000)
-    audio.export(output_path, format="wav")
+    if not input_path or not os.path.exists(input_path):
+        raise Exception("Audio input file does not exist")
+
+    if os.path.getsize(input_path) < 100:
+        raise Exception("Audio input file is empty")
+
+    try:
+        audio = AudioSegment.from_file(input_path)
+        if len(audio) <= 0:
+            raise Exception("Audio input has zero duration")
+        audio = audio.set_channels(1)
+        audio = audio.set_frame_rate(16000)
+        audio.export(output_path, format="wav")
+
+        if not os.path.exists(output_path) or os.path.getsize(output_path) < 100:
+            raise Exception("Converted WAV output is empty")
+        return
+    except Exception as first_error:
+        print(f"pydub conversion failed for {input_path}: {first_error}", file=sys.stderr)
+
+    try:
+        ffmpeg_cmd = [
+            "ffmpeg",
+            "-y",
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-i",
+            input_path,
+            "-vn",
+            "-ac",
+            "1",
+            "-ar",
+            "16000",
+            "-f",
+            "wav",
+            output_path,
+        ]
+        proc = subprocess.run(ffmpeg_cmd, capture_output=True, text=True, timeout=30)
+        if proc.returncode != 0:
+            raise Exception(proc.stderr.strip() or proc.stdout.strip() or "ffmpeg conversion failed")
+
+        if not os.path.exists(output_path) or os.path.getsize(output_path) < 100:
+            raise Exception("Converted WAV output is empty")
+    except Exception as second_error:
+        raise Exception(f"Could not convert audio chunk: {second_error}") from second_error
 
 
 def _get_model_order(preferred_model=None):
