@@ -1,6 +1,7 @@
 from google import genai
 from config import GEMINI_API_KEY
 from pydub import AudioSegment
+from services.platform_prompt import build_platform_prompt
 import speech_recognition as sr
 import tempfile
 import os
@@ -95,6 +96,18 @@ LANGUAGE_ALIASES = {
     "amharic": "am"
 }
 
+WHISPER_LANGUAGE_CODES = {
+    "af", "am", "ar", "as", "az", "ba", "be", "bg", "bn", "bo", "br", "bs",
+    "ca", "cs", "cy", "da", "de", "el", "en", "es", "et", "eu", "fa", "fi",
+    "fo", "fr", "gl", "gu", "ha", "haw", "he", "hi", "hr", "ht", "hu", "hy",
+    "id", "is", "it", "ja", "jw", "ka", "kk", "km", "kn", "ko", "la", "lb",
+    "ln", "lo", "lt", "lv", "mg", "mi", "mk", "ml", "mn", "mr", "ms", "mt",
+    "my", "ne", "nl", "nn", "no", "oc", "pa", "pl", "ps", "pt", "ro", "ru",
+    "sa", "sd", "si", "sk", "sl", "sn", "so", "sq", "sr", "su", "sv", "sw",
+    "ta", "te", "tg", "th", "tk", "tl", "tr", "tt", "uk", "ur", "uz", "vi",
+    "yi", "yo", "zh", "yue"
+}
+
 
 def normalize_language(language, default="en"):
     if not language:
@@ -114,6 +127,19 @@ def normalize_language(language, default="en"):
         return short_code
 
     return LANGUAGE_ALIASES.get(language_key, language)
+
+
+def normalize_whisper_language(language):
+    normalized_language = normalize_language(language, default="")
+
+    if not normalized_language:
+        return None
+
+    short_code = str(normalized_language).strip().lower().split("-")[0]
+    if short_code in WHISPER_LANGUAGE_CODES:
+        return short_code
+
+    return None
 
 
 def get_language_name(language):
@@ -169,7 +195,14 @@ def _get_whisper_model():
                 continue
             raise
 
-    raise last_error
+    # If we only failed due to memory allocation (MKL/ONNX/alloc), treat as "no model available"
+    if last_error is not None:
+        last_text = str(last_error).lower()
+        if "mkl_malloc" in last_text or "memory" in last_text or isinstance(last_error, MemoryError) or "bad allocation" in last_text:
+            print("_get_whisper_model: all candidate WhisperModel sizes failed due to memory; falling back to SR-based transcription.")
+            return None
+        # Otherwise raise the last error to surface configuration problems
+        raise last_error
 
 
 def _transcribe_with_whisper(video_path, source_lang, model=None):
@@ -179,7 +212,7 @@ def _transcribe_with_whisper(video_path, source_lang, model=None):
 
     normalized_source = None
     if source_lang and str(source_lang).strip().lower() != "auto":
-        normalized_source = normalize_language(source_lang)
+        normalized_source = normalize_whisper_language(source_lang)
 
     segments, info = whisper_model.transcribe(
         video_path,
@@ -205,21 +238,11 @@ def _transcribe_with_whisper(video_path, source_lang, model=None):
 def translate_text(text, target_lang):
 
     language_name = get_language_name(target_lang)
-
-    prompt = f"""
-You are a professional translator.
-
-Translate the following text into {language_name}.
-
-Rules:
-- Use authentic and standard {language_name}
-- Do not mix languages
-- Preserve names exactly
-- Return ONLY the translated text
-
-Text:
-{text}
-"""
+    task_instruction = (
+        f"Translate the provided text into {language_name}. "
+        f"Return only the translated text, keeping meaning, tone, and names accurate."
+    )
+    prompt = build_platform_prompt(task_instruction, text)
 
     response = client.models.generate_content(
         model="gemini-2.5-flash-lite",
@@ -294,7 +317,7 @@ def translate_video(video_path, source_lang, target_lang, model=None):
         raise
 
 
-def _split_audio_for_transcription(audio_path, base_start_seconds=0.0, max_duration_seconds=2.0):
+def _split_audio_for_transcription(audio_path, base_start_seconds=0.0, max_duration_seconds=6.0):
     """Split larger audio chunks into smaller windows so Whisper stays within memory limits."""
     if not audio_path or not os.path.exists(audio_path):
         return []
@@ -328,7 +351,15 @@ def _split_audio_for_transcription(audio_path, base_start_seconds=0.0, max_durat
     return chunk_paths or [(audio_path, base_start_seconds, base_start_seconds + (duration_ms / 1000.0))]
 
 
-def _stream_remote_url_in_chunks(stream_url, source_lang, target_lang, model=None, chunk_seconds=2):
+def _format_ffmpeg_headers(headers):
+    return ''.join(
+        f'{key}: {value}\r\n'
+        for key, value in (headers or {}).items()
+        if key and value
+    )
+
+
+def _stream_remote_url_in_chunks(stream_source, source_lang, target_lang, model=None, chunk_seconds=6):
     """
     Use ffmpeg to segment a remote audio/video stream into short WAV chunks
     and transcribe/translate each chunk sequentially to preserve streaming.
@@ -342,23 +373,72 @@ def _stream_remote_url_in_chunks(stream_url, source_lang, target_lang, model=Non
         temp_dir = tempfile.mkdtemp()
         pattern = os.path.join(temp_dir, "chunk_%04d.wav")
 
+        if isinstance(stream_source, dict):
+            stream_url = stream_source.get("url") or ""
+            request_headers = dict(stream_source.get("headers") or {})
+        else:
+            stream_url = str(stream_source or "")
+            request_headers = {}
+
+        user_agent = request_headers.get('User-Agent') or (
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
+            'AppleWebKit/537.36 (KHTML, like Gecko) '
+            'Chrome/125.0.0.0 Safari/537.36'
+        )
+        request_headers.setdefault('User-Agent', user_agent)
+        request_headers.setdefault('Accept-Language', 'en-US,en;q=0.9')
+        request_headers.setdefault('Referer', 'https://www.youtube.com/')
+        headers = _format_ffmpeg_headers(request_headers)
+
         ffmpeg_cmd = [
             "ffmpeg",
+            "-nostdin",
             "-y",
             "-hide_banner",
             "-loglevel",
-            "verbose",
+            "warning",
+            "-fflags",
+            "+nobuffer",
+            "-flags",
+            "low_delay",
+            "-user_agent",
+            user_agent,
+            "-headers",
+            headers,
+            "-reconnect",
+            "1",
+            "-reconnect_streamed",
+            "1",
+            "-reconnect_at_eof",
+            "1",
+            "-reconnect_delay_max",
+            "2",
+            "-rw_timeout",
+            str(30_000_000),
+            "-http_seekable",
+            "0",
+            "-protocol_whitelist",
+            "file,http,https,tcp,tls,hls,crypto",
+            "-probesize",
+            "10000000",
+            "-analyzeduration",
+            "10000000",
             "-i",
             stream_url,
-            "-vn",
+            "-map",
+            "0:a?",
             "-ac",
             "1",
             "-ar",
             "16000",
+            "-c:a",
+            "pcm_s16le",
             "-f",
             "segment",
             "-segment_time",
             str(chunk_seconds),
+            "-segment_format",
+            "wav",
             "-reset_timestamps",
             "1",
             pattern
@@ -371,7 +451,7 @@ def _stream_remote_url_in_chunks(stream_url, source_lang, target_lang, model=Non
                 ffmpeg_cmd, 
                 stdout=subprocess.PIPE, 
                 stderr=subprocess.PIPE,
-                text=False
+                text=True
             )
         except FileNotFoundError as e:
             yield {"type": "error", "message": "ffmpeg not found", "error": str(e)}
@@ -381,7 +461,7 @@ def _stream_remote_url_in_chunks(stream_url, source_lang, target_lang, model=Non
         index = 0
         output_index = 0
         start_time = time.time()
-        timeout_seconds = 15  # Give ffmpeg a shorter window to connect and produce chunks
+        timeout_seconds = 45  # Give ffmpeg a longer window to connect and produce chunks
         last_chunk_time = start_time
         
         # Loop until ffmpeg exits and no new files remain
@@ -393,7 +473,7 @@ def _stream_remote_url_in_chunks(stream_url, source_lang, target_lang, model=Non
             try:
                 _, stderr_chunk = ffmpeg_proc.communicate(timeout=0.1)
                 if stderr_chunk:
-                    ffmpeg_error_msg += stderr_chunk.decode('utf-8', errors='ignore')
+                    ffmpeg_error_msg += stderr_chunk
             except subprocess.TimeoutExpired:
                 pass
             
@@ -403,11 +483,17 @@ def _stream_remote_url_in_chunks(stream_url, source_lang, target_lang, model=Non
             time_since_last_chunk = current_time - last_chunk_time
             
             # If FFmpeg exited but produced no chunks, it likely failed
-            if poll_result is not None and len(processed) == 0 and elapsed > 3:
+            if poll_result is not None and len(processed) == 0:
                 print(f"[_stream_remote_url_in_chunks] FFmpeg exited without producing chunks. Error output:", file=sys.stderr)
                 print(ffmpeg_error_msg[-500:], file=sys.stderr)  # Print last 500 chars of error
                 
-                if "unable to open" in ffmpeg_error_msg.lower() or "connection" in ffmpeg_error_msg.lower():
+                error_text = ffmpeg_error_msg.lower()
+                if (
+                    "unable to open" in error_text
+                    or "connection" in error_text
+                    or "403" in error_text
+                    or "forbidden" in error_text
+                ):
                     yield {
                         "type": "error",
                         "message": "Stream connection failed",
@@ -432,7 +518,7 @@ def _stream_remote_url_in_chunks(stream_url, source_lang, target_lang, model=Non
                 
                 # ensure file is fully written
                 mtime = os.path.getmtime(f)
-                if time.time() - mtime < 0.5:
+                if time.time() - mtime < 1.0:
                     # wait until file is stable
                     continue
 
@@ -441,10 +527,25 @@ def _stream_remote_url_in_chunks(stream_url, source_lang, target_lang, model=Non
                 chunk_inputs = _split_audio_for_transcription(
                     f,
                     base_start_seconds=index * chunk_seconds,
-                    max_duration_seconds=min(chunk_seconds, 2.0)
+                    max_duration_seconds=min(chunk_seconds, 6.0)
                 )
 
                 for chunk_path, chunk_start, chunk_end in chunk_inputs:
+                    # Energy-based prefilter: skip very quiet chunks to avoid wasted transcription
+                    try:
+                        seg = AudioSegment.from_file(chunk_path)
+                        # if segment is extremely quiet, skip it
+                        if seg.dBFS < -44.0:
+                            print(f"[_stream_remote_url_in_chunks] Skipping quiet sub-chunk (dBFS={seg.dBFS:.1f}): {os.path.basename(chunk_path)}", file=sys.stderr)
+                            try:
+                                if chunk_path != f and os.path.exists(chunk_path):
+                                    os.remove(chunk_path)
+                            except Exception:
+                                pass
+                            continue
+                    except Exception:
+                        # If we can't read it, proceed to transcription which will handle errors
+                        pass
                     try:
                         transcript, detected_language = transcribe_video(chunk_path, source_lang, model)
                         if not transcript or not transcript.strip():
@@ -452,7 +553,13 @@ def _stream_remote_url_in_chunks(stream_url, source_lang, target_lang, model=Non
                             continue
                     except Exception as e:
                         print(f"[_stream_remote_url_in_chunks] Transcription failed for chunk {index}: {e}", file=sys.stderr)
-                        yield {"type": "error", "message": "Transcription failed", "error": str(e), "fallback_needed": True}
+                        # Do not force a download fallback for a single failed chunk.
+                        # Continue streaming so later chunks can still succeed.
+                        yield {
+                            "type": "error",
+                            "message": "Transcription failed for chunk",
+                            "error": str(e)
+                        }
                         continue
 
                     try:
@@ -501,10 +608,15 @@ def _stream_remote_url_in_chunks(stream_url, source_lang, target_lang, model=Non
             # Break on timeout if no chunks produced
             if time_since_last_chunk > timeout_seconds and index == 0:
                 print(f"[_stream_remote_url_in_chunks] Timeout: FFmpeg did not produce chunks after {timeout_seconds}s", file=sys.stderr)
+                if "failed to open" in ffmpeg_error_msg.lower() or "404" in ffmpeg_error_msg.lower() or "403" in ffmpeg_error_msg.lower():
+                    error_msg = "FFmpeg could not connect to or read from the stream URL. The URL may have expired, be blocked, or require additional headers."
+                else:
+                    error_msg = "FFmpeg did not produce any audio chunks within the timeout period. The stream may be temporarily slow or blocked."
+
                 yield {
                     "type": "error",
                     "message": "Stream timeout",
-                    "error": "FFmpeg did not produce any audio chunks. The stream may be unreachable or blocked.",
+                    "error": error_msg,
                     "fallback_needed": True
                 }
                 ffmpeg_failed = True
@@ -542,18 +654,58 @@ def _stream_remote_url_in_chunks(stream_url, source_lang, target_lang, model=Non
 
 
 def stream_translated_video_segments(video_path, source_lang, target_lang, model=None):
-    whisper_model = _get_whisper_model()
-    if whisper_model is None:
-        raise Exception("Real-time video subtitles require faster-whisper to be installed")
+    # Try to obtain a WhisperModel; if model loading fails due to memory
+    # pressure we gracefully continue with SR-based fallback paths.
+    try:
+        whisper_model = _get_whisper_model()
+    except Exception as e:
+        print(f"[stream_translated_video_segments] _get_whisper_model raised: {e}", file=sys.stderr)
+        whisper_model = None
 
     normalized_source = None
     if source_lang and str(source_lang).strip().lower() != "auto":
-        normalized_source = normalize_language(source_lang)
+        normalized_source = normalize_whisper_language(source_lang)
 
     target_lang = normalize_language(target_lang, default=target_lang)
     # If given a remote stream URL, process it in short chunks via ffmpeg
-    if isinstance(video_path, str) and video_path.startswith(('http://', 'https://')):
+    if isinstance(video_path, dict) and video_path.get("url"):
+        # remote chunker uses transcribe_video() which already includes SR fallback
         yield from _stream_remote_url_in_chunks(video_path, source_lang, target_lang, model)
+        return
+
+    if isinstance(video_path, str) and video_path.startswith(('http://', 'https://')):
+        # remote chunker uses transcribe_video() which already includes SR fallback
+        yield from _stream_remote_url_in_chunks(video_path, source_lang, target_lang, model)
+        return
+
+    # If we couldn't load a Whisper model due to memory constraints, fall back
+    # to the SR-based transcription for local files so we still return subtitles.
+    if whisper_model is None:
+        try:
+            print("[stream_translated_video_segments] No Whisper model available; using SR fallback for local file.", file=sys.stderr)
+            transcript, detected_language = transcribe_video(video_path, source_lang, model)
+            try:
+                translated_text = translate_text(transcript, target_lang)
+            except Exception:
+                translated_text = f"[translation unavailable]"
+
+            yield {
+                "type": "segment",
+                "index": 0,
+                "start": 0.0,
+                "end": 0.0,
+                "original": transcript,
+                "translated": translated_text,
+                "detected_language": detected_language,
+                "detected_language_name": get_language_name(detected_language),
+                "target_language": target_lang,
+                "model": model
+            }
+            yield {"type": "complete"}
+        except Exception as e:
+            print(f"[stream_translated_video_segments] SR fallback failed: {e}", file=sys.stderr)
+            traceback.print_exc()
+            yield {"type": "error", "message": "Transcription failed", "error": str(e)}
         return
     
     segments = None
@@ -565,7 +717,8 @@ def stream_translated_video_segments(video_path, source_lang, target_lang, model
                 video_path,
                 language=normalized_source,
                 vad_filter=False,
-                word_timestamps=False
+                word_timestamps=False,
+                chunk_length=5
             )
             # Convert generator to list to catch errors early
             segments = list(segments_gen)
@@ -590,7 +743,8 @@ def stream_translated_video_segments(video_path, source_lang, target_lang, model
                                 video_path,
                                 language=normalized_source,
                                 vad_filter=False,
-                                word_timestamps=False
+                                word_timestamps=False,
+                                chunk_length=5
                             )
                             segments = list(segments_gen)
                             print(f"[stream_translated_video_segments] Fallback transcription succeeded with {size}, got {len(segments)} segments", file=sys.stderr)
@@ -788,23 +942,11 @@ def stream_translated_video_segments(video_path, source_lang, target_lang, model
 
 def summarize_transcript_with_model(transcript, source_lang, model=None):
     language_name = get_language_name(source_lang)
-
-    prompt = f"""
-You summarize spoken educational video transcripts.
-
-Language: {language_name}
-
-Rules:
-- Summarize in the same language as the transcript.
-- Do not translate.
-- Keep the important ideas, explanations, names, and steps.
-- Use clear, concise bullet points.
-- Do not add facts that are not in the transcript.
-- Return ONLY the summary.
-
-Transcript:
-{transcript}
-"""
+    task_instruction = (
+        f"Summarize the provided educational transcript in {language_name}. "
+        f"Keep the important ideas, names, and steps, and return only the summary."
+    )
+    prompt = build_platform_prompt(task_instruction, transcript)
 
     response, model_used = _generate_content_with_fallback(prompt, model)
 
@@ -870,21 +1012,11 @@ def _translate_texts_with_model(texts, target_lang, model=None):
 
     target_lang = normalize_language(target_lang, default=target_lang)
     language_name = get_language_name(target_lang)
-
-    prompt = f"""
-You are a professional translator.
-
-Translate each of the following sentences into {language_name}.
-
-Rules:
-- Preserve meaning
-- Use natural and fluent {language_name}
-- Preserve names exactly
-- Return ONLY the translated sentences separated by ||| in the same order.
-
-Sentences:
-{chr(10).join(texts)}
-"""
+    task_instruction = (
+        f"Translate each sentence into {language_name}. "
+        f"Return the translations in the same order, separated by |||, preserving meaning and names."
+    )
+    prompt = build_platform_prompt(task_instruction, "\n".join(texts))
 
     try:
         response, model_used = _generate_content_with_fallback(prompt, model)
@@ -939,23 +1071,11 @@ Sentences:
 
 def punctuate_transcript_with_model(transcript, source_lang, model=None):
     language_name = get_language_name(source_lang)
-
-    prompt = f"""
-You restore punctuation and capitalization for speech transcripts.
-
-Language: {language_name}
-
-Rules:
-- Add punctuation marks where they naturally belong.
-- Add capitalization where appropriate.
-- Do not translate.
-- Do not add new facts or extra words.
-- Keep the original wording as much as possible.
-- Return ONLY the punctuated transcript.
-
-Transcript:
-{transcript}
-"""
+    task_instruction = (
+        f"Restore punctuation and capitalization for a transcript in {language_name}. "
+        f"Do not translate it, and return only the punctuated transcript."
+    )
+    prompt = build_platform_prompt(task_instruction, transcript)
 
     response, model_used = _generate_content_with_fallback(prompt, model)
 
@@ -975,22 +1095,11 @@ def translate_speech_with_model(transcript, target_lang, model=None):
 
     target_lang = normalize_language(target_lang, default=target_lang)
     language_name = get_language_name(target_lang)
-
-    prompt = f"""
-You are a professional translator.
-
-Translate the following spoken sentence into {language_name}.
-
-Rules:
-- Preserve meaning
-- Use natural and fluent {language_name}
-- Preserve names exactly
-- Use proper fluent {language_name}
-- Return ONLY the translation
-
-Sentence:
-{transcript}
-"""
+    task_instruction = (
+        f"Translate the spoken sentence into {language_name}. "
+        f"Return only the translation, preserving meaning, tone, and names."
+    )
+    prompt = build_platform_prompt(task_instruction, transcript)
 
     response, model_used = _generate_content_with_fallback(prompt, model)
 

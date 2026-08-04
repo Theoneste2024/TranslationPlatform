@@ -7,8 +7,7 @@ from services.gemini_service import (
 from services.youtube_service import (
     normalize_youtube_url,
     download_youtube_with_yt_dlp,
-    get_youtube_stream_url,
-    is_youtube_url
+    get_youtube_stream_source
 )
 from services.audio_stream_service import remove_temp_dir
 from services.speech_service import transcribe_audio
@@ -253,13 +252,11 @@ def _should_fallback_to_download(segment):
         return False
     if segment.get("fallback_needed") is True:
         return True
+    if segment.get("type") != "error":
+        return False
+
     message = str(segment.get("message") or "").lower()
-    if segment.get("type") == "error" and (
-        "stream" in message
-        or "connection" in message
-        or "transcription failed" in message
-        or "ffmpeg" in message
-    ):
+    if "stream" in message or "connection" in message or "ffmpeg" in message:
         return True
     return False
 
@@ -294,6 +291,7 @@ def _normalize_stream_segments(stream_segments):
         yield normalized_segment
 
 
+@video_bp.route("/youtube/live-translate", methods=["POST"])
 @video_bp.route("/video-translate-stream", methods=["POST"])
 def video_translate_stream():
     """Stream-based video translation endpoint for real-time subtitle delivery."""
@@ -334,7 +332,6 @@ def video_translate_stream():
             force_download_flag = str(force_download).strip().lower() in ("1", "true", "yes")
             need_download_fallback = False
             segment_count = 0
-            stream_failed = False
 
             if force_download_flag:
                 logger.info("Force download mode enabled")
@@ -365,11 +362,10 @@ def video_translate_stream():
             else:
                 logger.info("Streaming mode: attempting direct URL stream")
                 try:
-                    stream_url = get_youtube_stream_url(youtube_url)
+                    stream_source = get_youtube_stream_source(youtube_url)
                 except Exception as e:
                     logger.warning(f"Stream URL extraction failed, falling back to download: {e}")
                     need_download_fallback = True
-                    stream_failed = True
                     yield _json_stream_event({
                         "type": "status",
                         "message": "Stream unavailable, downloading for translation"
@@ -380,22 +376,59 @@ def video_translate_stream():
                         "message": "Listening for spoken phrases"
                     })
 
+                    stream_start_count = segment_count
+                    retry_stream = False
                     for segment in _normalize_stream_segments(stream_translated_video_segments(
-                        stream_url,
+                        stream_source,
                         source_language,
                         target_language,
                         model
                     )):
                         if _should_fallback_to_download(segment):
-                            logger.warning("Stream translation requested download fallback")
-                            need_download_fallback = True
-                            stream_failed = True
-                            yield _json_stream_event(segment)
+                            retry_stream = True
                             break
 
                         if isinstance(segment, dict) and segment.get("type") == "segment":
                             segment_count += 1
                         yield _json_stream_event(segment)
+
+                    if retry_stream and segment_count == stream_start_count:
+                        logger.info("Retrying stream with a fresh YouTube media URL")
+                        yield _json_stream_event({
+                            "type": "status",
+                            "message": "Refreshing YouTube audio stream"
+                        })
+
+                        try:
+                            stream_source = get_youtube_stream_source(youtube_url)
+                        except Exception as e:
+                            logger.warning(f"Fresh stream URL extraction failed: {e}")
+                            need_download_fallback = True
+                        else:
+                            for segment in _normalize_stream_segments(stream_translated_video_segments(
+                                stream_source,
+                                source_language,
+                                target_language,
+                                model
+                            )):
+                                if _should_fallback_to_download(segment):
+                                    logger.warning("Fresh stream retry requested download fallback")
+                                    need_download_fallback = True
+                                    break
+
+                                if isinstance(segment, dict) and segment.get("type") == "segment":
+                                    segment_count += 1
+                                yield _json_stream_event(segment)
+                    elif retry_stream:
+                        logger.info("Stream ended after producing translated segments")
+
+                    if segment_count == stream_start_count and not need_download_fallback:
+                        logger.info("Stream produced no translated speech segments; falling back to download")
+                        need_download_fallback = True
+                        yield _json_stream_event({
+                            "type": "status",
+                            "message": "No translated speech received from stream, trying download fallback"
+                        })
 
                 if need_download_fallback:
                     logger.info("Executing fallback download strategy")

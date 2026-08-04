@@ -7,6 +7,7 @@ from typing import List, Optional, Dict, Any
 from google import genai
 from config import GEMINI_API_KEY
 from utils.logger import get_logger
+from services.platform_prompt import build_platform_prompt
 
 logger = get_logger("translation_service")
 
@@ -102,11 +103,11 @@ class TranslationService:
             f"(text_length={len(text)}, model={model})"
         )
         
-        prompt = (
-            f"Translate the following text from {source_lang_name} to {target_lang_name}. "
-            f"Return only the translated text, nothing else.\n\n"
-            f"Text: {text}"
+        task_instruction = (
+            f"Translate the provided text from {source_lang_name} to {target_lang_name}. "
+            f"Return only the translated text, preserving meaning, tone, and names."
         )
+        prompt = build_platform_prompt(task_instruction, text)
         
         try:
             response = self.client.models.generate_content(
@@ -172,12 +173,11 @@ class TranslationService:
         # Try batch translation first
         try:
             batch_text = separator.join(texts)
-            prompt = (
-                f"Translate the following texts from {source_lang_name} to {target_lang_name}. "
-                f"The texts are separated by '{separator}'. "
-                f"Return the translations in the same format, separated by the same separator.\n\n"
-                f"Texts: {batch_text}"
+            task_instruction = (
+                f"Translate the provided texts from {source_lang_name} to {target_lang_name}. "
+                f"Return the translations in the same order, separated by '{separator}', preserving meaning and names."
             )
+            prompt = build_platform_prompt(task_instruction, batch_text)
             
             response = self.client.models.generate_content(
                 model=model,

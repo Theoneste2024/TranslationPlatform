@@ -6,7 +6,6 @@ Provides centralized YouTube operations with proper error handling and logging.
 import os
 import re
 from urllib.parse import parse_qs, urlparse
-from typing import Optional
 from utils.logger import get_logger
 
 try:
@@ -165,21 +164,18 @@ def download_youtube_with_yt_dlp(youtube_url: str, download_dir: str) -> str:
     raise RuntimeError('yt_dlp did not return a download path')
 
 
-def get_youtube_stream_url(youtube_url: str) -> str:
-    """
-    Extract direct audio stream URL from YouTube without downloading.
-    
-    This is used for real-time streaming and live translation.
-    
-    Args:
-        youtube_url: Normalized YouTube URL
-        
-    Returns:
-        Direct stream URL for the best audio format
-        
-    Raises:
-        RuntimeError: If yt-dlp fails or no stream is available
-    """
+DEFAULT_YOUTUBE_HEADERS = {
+    'User-Agent': (
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
+        'AppleWebKit/537.36 (KHTML, like Gecko) '
+        'Chrome/125.0.0.0 Safari/537.36'
+    ),
+    'Accept-Language': 'en-US,en;q=0.9',
+    'Referer': 'https://www.youtube.com/',
+}
+
+
+def _get_youtube_downloader():
     youtube_downloader = YoutubeDL
     if youtube_downloader is None:
         try:
@@ -187,9 +183,47 @@ def get_youtube_stream_url(youtube_url: str) -> str:
             youtube_downloader = ImportedYoutubeDL
         except ImportError as e:
             raise RuntimeError("yt_dlp is not installed in the Python environment") from e
+    return youtube_downloader
+
+
+def _is_audio_format(format_info: dict) -> bool:
+    acodec = (format_info.get('acodec') or '').lower()
+    return bool(format_info.get('url')) and acodec not in ('', 'none')
+
+
+def _audio_format_score(format_info: dict) -> tuple:
+    protocol = str(format_info.get('protocol') or '')
+    ext = str(format_info.get('ext') or '')
+    try:
+        abr = float(format_info.get('abr') or format_info.get('tbr') or 0)
+    except (TypeError, ValueError):
+        abr = 0.0
+
+    # Prefer simple HTTP audio streams; FFmpeg can read these immediately.
+    protocol_score = 2 if protocol in ('https', 'http') else 1
+    ext_score = 1 if ext in ('m4a', 'webm', 'mp4') else 0
+    return protocol_score, ext_score, abr
+
+
+def get_youtube_stream_source(youtube_url: str) -> dict:
+    """
+    Extract direct audio stream details from YouTube without downloading.
+    
+    This is used for real-time streaming and live translation.
+    
+    Args:
+        youtube_url: Normalized YouTube URL
+        
+    Returns:
+        Dict with a direct stream URL plus headers FFmpeg should send
+        
+    Raises:
+        RuntimeError: If yt-dlp fails or no stream is available
+    """
+    youtube_downloader = _get_youtube_downloader()
 
     ydl_opts = {
-        'format': 'bestaudio/best',
+        'format': 'bestaudio[acodec!=none]/bestaudio/best',
         'quiet': True,
         'no_warnings': True,
         'noplaylist': True,
@@ -197,15 +231,8 @@ def get_youtube_stream_url(youtube_url: str) -> str:
         'geo_bypass': True,
         'socket_timeout': 30,
         'cachedir': False,
-        'http_headers': {
-            'User-Agent': (
-                'Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
-                'AppleWebKit/537.36 (KHTML, like Gecko) '
-                'Chrome/125.0.0.0 Safari/537.36'
-            ),
-            'Accept-Language': 'en-US,en;q=0.9',
-            'Referer': 'https://www.youtube.com/',
-        },
+        'http_chunk_size': 1048576,
+        'http_headers': DEFAULT_YOUTUBE_HEADERS,
     }
 
     logger.info(f"Extracting stream URL from: {youtube_url}")
@@ -222,25 +249,34 @@ def get_youtube_stream_url(youtube_url: str) -> str:
 
     if isinstance(info, dict):
         formats = info.get('formats') or []
-        audio_candidates = [f for f in formats if f.get('acodec') and f.get('url')]
+        audio_candidates = [f for f in formats if _is_audio_format(f)]
         if not audio_candidates:
-            audio_candidates = [f for f in formats if f.get('url')]
+            audio_candidates = [info] if _is_audio_format(info) else []
 
         if audio_candidates:
-            def bitrate_key(f):
-                return int(f.get('abr') or f.get('tbr') or 0)
-
-            best = max(audio_candidates, key=bitrate_key)
+            best = max(audio_candidates, key=_audio_format_score)
             url = best.get('url')
             if url:
-                logger.info(f"Stream URL extracted successfully")
-                return url
-
-        if info.get('url'):
-            logger.info(f"Using fallback stream URL")
-            return info.get('url')
+                headers = dict(DEFAULT_YOUTUBE_HEADERS)
+                headers.update(info.get('http_headers') or {})
+                headers.update(best.get('http_headers') or {})
+                logger.info("Stream URL extracted successfully")
+                return {
+                    "url": url,
+                    "headers": headers,
+                    "format_id": best.get('format_id'),
+                    "protocol": best.get('protocol'),
+                    "ext": best.get('ext'),
+                    "is_live": bool(info.get('is_live')),
+                    "source": youtube_url,
+                }
 
     raise RuntimeError('Could not obtain a stream URL from yt_dlp')
+
+
+def get_youtube_stream_url(youtube_url: str) -> str:
+    """Backward-compatible helper that returns only the direct stream URL."""
+    return get_youtube_stream_source(youtube_url)["url"]
 
 
 def is_youtube_url(url: str) -> bool:
