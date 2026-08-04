@@ -422,6 +422,152 @@ def _format_ffmpeg_headers(headers):
     )
 
 
+def _stream_local_video_in_chunks(video_path, source_lang, target_lang, model=None, chunk_seconds=6):
+    """Split a local video into short audio chunks and yield translated segments progressively."""
+    temp_dir = None
+    ffmpeg_proc = None
+    ffmpeg_error_msg = ""
+
+    try:
+        temp_dir = tempfile.mkdtemp()
+        pattern = os.path.join(temp_dir, "chunk_%04d.wav")
+
+        ffmpeg_cmd = [
+            "ffmpeg",
+            "-nostdin",
+            "-y",
+            "-hide_banner",
+            "-loglevel",
+            "warning",
+            "-i",
+            video_path,
+            "-map",
+            "0:a?",
+            "-ac",
+            "1",
+            "-ar",
+            "16000",
+            "-c:a",
+            "pcm_s16le",
+            "-f",
+            "segment",
+            "-segment_time",
+            str(chunk_seconds),
+            "-segment_format",
+            "wav",
+            "-reset_timestamps",
+            "1",
+            pattern,
+        ]
+
+        print(f"[_stream_local_video_in_chunks] Starting FFmpeg for {video_path}", file=sys.stderr)
+        ffmpeg_proc = subprocess.Popen(ffmpeg_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+
+        processed = set()
+        index = 0
+        output_index = 0
+        start_time = time.time()
+        timeout_seconds = 60
+        last_chunk_time = start_time
+
+        while True:
+            poll_result = ffmpeg_proc.poll()
+            try:
+                _, stderr_chunk = ffmpeg_proc.communicate(timeout=0.1)
+                if stderr_chunk:
+                    ffmpeg_error_msg += stderr_chunk
+            except subprocess.TimeoutExpired:
+                pass
+
+            current_time = time.time()
+            time_since_last_chunk = current_time - last_chunk_time
+
+            files = sorted(glob.glob(os.path.join(temp_dir, "chunk_*.wav")))
+            for chunk_path in files:
+                if chunk_path in processed:
+                    continue
+
+                try:
+                    if os.path.getmtime(chunk_path) > current_time - 0.5:
+                        continue
+                except OSError:
+                    pass
+
+                try:
+                    transcript, detected_language = transcribe_video(chunk_path, source_lang, model)
+                    if not transcript or not transcript.strip():
+                        continue
+                except Exception as e:
+                    print(f"[_stream_local_video_in_chunks] Transcription failed for chunk {index}: {e}", file=sys.stderr)
+                    yield {"type": "error", "message": "Transcription failed for chunk", "error": str(e)}
+                    continue
+
+                try:
+                    translated_text, _ = _translate_texts_with_model([transcript], target_lang, model)
+                    translated_text = translated_text[0] if isinstance(translated_text, list) else translated_text
+                except Exception as e:
+                    print(f"[_stream_local_video_in_chunks] Translation failed for chunk {index}: {e}", file=sys.stderr)
+                    translated_text = f"[translation unavailable: {e}]"
+
+                yield {
+                    "type": "segment",
+                    "index": output_index,
+                    "start": float(index * chunk_seconds),
+                    "end": float((index + 1) * chunk_seconds),
+                    "original": transcript,
+                    "translated": translated_text,
+                    "detected_language": detected_language,
+                    "detected_language_name": get_language_name(detected_language),
+                    "target_language": target_lang,
+                    "model": model,
+                }
+                output_index += 1
+                processed.add(chunk_path)
+                last_chunk_time = current_time
+                try:
+                    os.remove(chunk_path)
+                except Exception:
+                    pass
+
+                index += 1
+
+            if poll_result is not None and all(path in processed for path in files):
+                break
+
+            if time_since_last_chunk > timeout_seconds and index == 0:
+                yield {
+                    "type": "error",
+                    "message": "Stream timeout",
+                    "error": "FFmpeg did not produce any audio chunks within the timeout period.",
+                    "fallback_needed": True,
+                }
+                break
+
+            time.sleep(0.2)
+    finally:
+        try:
+            if ffmpeg_proc and ffmpeg_proc.poll() is None:
+                ffmpeg_proc.terminate()
+                ffmpeg_proc.wait(timeout=2)
+        except Exception:
+            pass
+
+        try:
+            if temp_dir and os.path.exists(temp_dir):
+                for root, _, files in os.walk(temp_dir):
+                    for file_name in files:
+                        try:
+                            os.remove(os.path.join(root, file_name))
+                        except Exception:
+                            pass
+                try:
+                    os.rmdir(temp_dir)
+                except Exception:
+                    pass
+        except Exception:
+            pass
+
+
 def _stream_remote_url_in_chunks(stream_source, source_lang, target_lang, model=None, chunk_seconds=6):
     """
     Use ffmpeg to segment a remote audio/video stream into short WAV chunks
@@ -739,6 +885,11 @@ def stream_translated_video_segments(video_path, source_lang, target_lang, model
     if isinstance(video_path, str) and video_path.startswith(('http://', 'https://')):
         # remote chunker uses transcribe_video() which already includes SR fallback
         yield from _stream_remote_url_in_chunks(video_path, source_lang, target_lang, model)
+        return
+
+    # Local files are streamed in short windows so subtitle output can begin early.
+    if isinstance(video_path, str) and os.path.isfile(video_path):
+        yield from _stream_local_video_in_chunks(video_path, source_lang, target_lang, model)
         return
 
     # If we couldn't load a Whisper model due to memory constraints, fall back
@@ -1093,10 +1244,13 @@ def _get_model_order(preferred_model=None):
 
 def _generate_content_with_fallback(prompt, preferred_model=None):
     last_error = None
+    gemini_client = _get_genai_client()
+    if gemini_client is None:
+        raise RuntimeError("Gemini API key not configured")
 
     for model in _get_model_order(preferred_model):
         try:
-            response = client.models.generate_content(
+            response = gemini_client.models.generate_content(
                 model=model,
                 contents=prompt
             )

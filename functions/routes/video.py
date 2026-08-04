@@ -313,16 +313,35 @@ def video_translate_stream():
     if not target_language:
         return jsonify({"error": "Missing target_language"}), 400
 
-    if not youtube_url:
-        return jsonify({"error": "Missing youtube_url"}), 400
+    video_file = None
+    temp_file_path = None
+    temp_file = None
 
-    try:
-        youtube_url = normalize_youtube_url(youtube_url)
-        logger.info(f"Starting stream translation: {youtube_url}")
-    except ValueError as e:
-        return jsonify({"error": str(e)}), 400
+    if "video" in request.files:
+        video_file = request.files["video"]
+        if video_file and video_file.filename:
+            try:
+                file_extension = _get_upload_extension(video_file.filename or "")
+            except ValueError as e:
+                return jsonify({"error": str(e)}), 400
+
+            temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=file_extension)
+            temp_file.close()
+            video_file.save(temp_file.name)
+            temp_file_path = temp_file.name
+
+    if not youtube_url and not temp_file_path:
+        return jsonify({"error": "Missing video file or youtube_url"}), 400
+
+    if youtube_url:
+        try:
+            youtube_url = normalize_youtube_url(youtube_url)
+            logger.info(f"Starting stream translation: {youtube_url}")
+        except ValueError as e:
+            return jsonify({"error": str(e)}), 400
 
     def generate():
+        nonlocal temp_file_path
         try:
             yield _json_stream_event({
                 "type": "status",
@@ -333,7 +352,30 @@ def video_translate_stream():
             need_download_fallback = False
             segment_count = 0
 
-            if force_download_flag:
+            if temp_file_path:
+                logger.info("Processing uploaded video file in stream mode")
+                yield _json_stream_event({"type": "status", "message": "Processing uploaded video"})
+                try:
+                    for segment in _normalize_stream_segments(stream_translated_video_segments(
+                        temp_file_path,
+                        source_language,
+                        target_language,
+                        model
+                    )):
+                        if isinstance(segment, dict) and segment.get("type") == "segment":
+                            segment_count += 1
+                        yield _json_stream_event(segment)
+                except Exception as e:
+                    logger.error(f"Uploaded video processing failed: {e}")
+                    yield _json_stream_event({"type": "error", "message": "Uploaded video processing failed", "error": str(e)})
+                finally:
+                    try:
+                        if temp_file_path and os.path.exists(temp_file_path):
+                            os.remove(temp_file_path)
+                    except Exception:
+                        pass
+
+            elif force_download_flag:
                 logger.info("Force download mode enabled")
                 yield _json_stream_event({"type": "status", "message": "Downloading YouTube video (forced)"})
                 temp_dir = None

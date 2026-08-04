@@ -354,20 +354,22 @@ class _VideoTranslationScreenState extends State<VideoTranslationScreen> {
     _stopLiveTranslationWatchdog();
     setState(() {
       _isTranslating = true;
-      _mediaType = 'youtube';
+      _mediaType = 'video';
       _originalTranscript = '';
       _translatedText = '';
       _summaryText = '';
       _summaryLanguageName = '';
       _liveSubtitleText = '';
-      _liveStatus = 'Preparing live translated subtitles...';
+      _liveStatus = 'Preparing streamed subtitles...';
       _subtitles.clear();
     });
-    _resetLiveTranslationWatchdog(runId);
+    _resetLiveTranslationWatchdog(runId, timeout: _liveTranslationInitialTimeout);
 
     try {
-      final request =
-          http.MultipartRequest('POST', Uri.parse(AppConstants.videoTranslate));
+      final request = http.MultipartRequest(
+        'POST',
+        Uri.parse(AppConstants.videoTranslateStream),
+      );
       request.fields['source_language'] = _sourceLanguage;
       request.fields['target_language'] = _targetLanguage;
 
@@ -389,30 +391,46 @@ class _VideoTranslationScreenState extends State<VideoTranslationScreen> {
         );
       }
 
-      final streamedResponse = await request.send();
-      final response = await http.Response.fromStream(streamedResponse);
-      final data = jsonDecode(response.body);
-
-      if (response.statusCode == 200) {
-        setState(() {
-          _originalTranscript = data['original_text'] ?? '';
-          _translatedText = data['translated_text'] ?? '';
-          _summaryText = '';
-          _summaryLanguageName = '';
-        });
-        if (_isAudioEnabled && (_translatedText).trim().isNotEmpty) {
-          unawaited(_speakTranslatedText(_translatedText, language: _targetLanguage));
-        }
-        _showSnackBar('✅ Translation complete!', Colors.green);
-      } else {
+      final response = await request.send();
+      _resetLiveTranslationWatchdog(runId);
+      if (response.statusCode != 200) {
+        _stopLiveTranslationWatchdog();
+        final body = await response.stream.bytesToString();
+        final data = jsonDecode(body);
         throw Exception(data['error'] ?? 'Media upload failed');
       }
+
+      _liveTranslationSubscription = response.stream
+          .transform(utf8.decoder)
+          .transform(const LineSplitter())
+          .listen(
+        (line) {
+          if (runId != _liveTranslationRunId || line.trim().isEmpty) return;
+          _resetLiveTranslationWatchdog(runId);
+          _handleLiveTranslationEvent(jsonDecode(line));
+        },
+        onError: (error) {
+          if (!mounted || runId != _liveTranslationRunId) return;
+          _stopLiveTranslationWatchdog();
+          setState(() => _isTranslating = false);
+          _showSnackBar('Media upload failed: $error', Colors.red);
+        },
+        onDone: () {
+          if (!mounted || runId != _liveTranslationRunId) return;
+          _stopLiveTranslationWatchdog();
+          setState(() {
+            _isTranslating = false;
+            _liveStatus = _subtitles.isEmpty
+                ? 'No spoken phrases were detected.'
+                : 'Streamed subtitles ready.';
+          });
+        },
+        cancelOnError: true,
+      );
     } catch (e) {
+      _stopLiveTranslationWatchdog();
+      setState(() => _isTranslating = false);
       _showSnackBar('Media upload failed: $e', Colors.red);
-    } finally {
-      if (mounted) {
-        setState(() => _isTranslating = false);
-      }
     }
   }
 
