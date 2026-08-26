@@ -1,16 +1,16 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../providers/offline_provider.dart';
 import '../../core/constants/languages.dart';
 
-class OfflinePacksScreen extends StatefulWidget {
+class OfflinePacksScreen extends ConsumerStatefulWidget {
   const OfflinePacksScreen({super.key});
 
   @override
-  State<OfflinePacksScreen> createState() => _OfflinePacksScreenState();
+  ConsumerState<OfflinePacksScreen> createState() => _OfflinePacksScreenState();
 }
 
-class _OfflinePacksScreenState extends State<OfflinePacksScreen> {
+class _OfflinePacksScreenState extends ConsumerState<OfflinePacksScreen> {
   final List<OfflinePack> _availablePacks = [
     OfflinePack(
       id: 'basic_rw',
@@ -74,7 +74,7 @@ class _OfflinePacksScreenState extends State<OfflinePacksScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final offlineProvider = Provider.of<OfflineProvider>(context);
+    final offline = ref.watch(offlineProvider);
 
     return Scaffold(
       appBar: AppBar(
@@ -89,7 +89,7 @@ class _OfflinePacksScreenState extends State<OfflinePacksScreen> {
                   // Show active downloads
                 },
               ),
-              if (offlineProvider.activeDownloads > 0)
+              if (offline.activeDownloads > 0)
                 Positioned(
                   right: 8,
                   top: 8,
@@ -104,7 +104,7 @@ class _OfflinePacksScreenState extends State<OfflinePacksScreen> {
                       minHeight: 16,
                     ),
                     child: Text(
-                      '${offlineProvider.activeDownloads}',
+                      '${offline.activeDownloads}',
                       style: const TextStyle(
                         color: Colors.white,
                         fontSize: 10,
@@ -159,7 +159,7 @@ class _OfflinePacksScreenState extends State<OfflinePacksScreen> {
           ),
 
           // Downloaded Packs Summary
-          if (offlineProvider.downloadedPacks.isNotEmpty)
+          if (offline.downloadedPacks.isNotEmpty)
             Container(
               padding: const EdgeInsets.all(16),
               child: Row(
@@ -189,7 +189,7 @@ class _OfflinePacksScreenState extends State<OfflinePacksScreen> {
               itemCount: _availablePacks.length,
               itemBuilder: (context, index) {
                 final pack = _availablePacks[index];
-                final isDownloaded = offlineProvider.isPackDownloaded(pack.id);
+                final isDownloaded = ref.read(offlineProvider.notifier).isPackDownloaded(pack.id);
 
                 return Card(
                   margin: const EdgeInsets.only(bottom: 12),
@@ -414,17 +414,8 @@ class _OfflinePacksScreenState extends State<OfflinePacksScreen> {
 
   // ✅ DOWNLOAD PACK - FIXED with pack.id
   void _downloadPack(BuildContext context, OfflinePack pack) {
-    final offlineProvider = Provider.of<OfflineProvider>(
-      context,
-      listen: false,
-    );
-
-    // ✅ All packs are free for now - payment code commented out
-    // if (!pack.isFree) {
-    //   _showPaymentDialog(context, pack);
-    // } else {
     // Start free download
-    offlineProvider.downloadPack(pack.id);
+    ref.read(offlineProvider.notifier).downloadPack(pack.id);
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -435,7 +426,7 @@ class _OfflinePacksScreenState extends State<OfflinePacksScreen> {
           label: 'Cancel',
           textColor: Colors.white,
           onPressed: () {
-            offlineProvider.cancelDownload(pack.id);
+            ref.read(offlineProvider.notifier).cancelDownload(pack.id);
           },
         ),
       ),

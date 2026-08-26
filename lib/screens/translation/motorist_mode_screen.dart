@@ -4,15 +4,16 @@ import 'package:flutter_map/flutter_map.dart'; // ✅ FREE OSM - NO API KEY
 import 'package:latlong2/latlong.dart'; // ✅ FREE coordinates
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 import 'package:flutter_tts/flutter_tts.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-class MotoristModeScreen extends StatefulWidget {
+class MotoristModeScreen extends ConsumerStatefulWidget {
   const MotoristModeScreen({super.key});
 
   @override
-  State<MotoristModeScreen> createState() => _MotoristModeScreenState();
+  ConsumerState<MotoristModeScreen> createState() => _MotoristModeScreenState();
 }
 
-class _MotoristModeScreenState extends State<MotoristModeScreen>
+class _MotoristModeScreenState extends ConsumerState<MotoristModeScreen>
     with WidgetsBindingObserver {
   late stt.SpeechToText _speech;
   late FlutterTts _flutterTts;

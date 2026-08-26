@@ -1,17 +1,18 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import '../../core/constants/app_constants.dart';
 import 'package:flutter/services.dart';
 
-class TextTranslationScreen extends StatefulWidget {
+class TextTranslationScreen extends ConsumerStatefulWidget {
   const TextTranslationScreen({super.key});
 
   @override
-  State<TextTranslationScreen> createState() => _TextTranslationScreenState();
+  ConsumerState<TextTranslationScreen> createState() => _TextTranslationScreenState();
 }
 
-class _TextTranslationScreenState extends State<TextTranslationScreen> {
+class _TextTranslationScreenState extends ConsumerState<TextTranslationScreen> {
   final TextEditingController _sourceController = TextEditingController();
   final TextEditingController _targetController = TextEditingController();
   String _sourceLanguage = 'en';

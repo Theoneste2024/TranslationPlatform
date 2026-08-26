@@ -1,28 +1,35 @@
-import 'package:flutter/foundation.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-class MotoristProvider extends ChangeNotifier {
-  bool _isNavigating = false;
-  String? _currentDestination;
-  bool _isListening = false;
+class MotoristState {
+  final bool isNavigating;
+  final String? currentDestination;
+  final bool isListening;
 
-  bool get isNavigating => _isNavigating;
-  String? get currentDestination => _currentDestination;
-  bool get isListening => _isListening;
+  MotoristState({required this.isNavigating, required this.currentDestination, required this.isListening});
+
+  MotoristState copyWith({bool? isNavigating, String? currentDestination, bool? isListening}) {
+    return MotoristState(
+      isNavigating: isNavigating ?? this.isNavigating,
+      currentDestination: currentDestination ?? this.currentDestination,
+      isListening: isListening ?? this.isListening,
+    );
+  }
+}
+
+class MotoristNotifier extends StateNotifier<MotoristState> {
+  MotoristNotifier() : super(MotoristState(isNavigating: false, currentDestination: null, isListening: false));
 
   void startNavigation(String destination) {
-    _isNavigating = true;
-    _currentDestination = destination;
-    notifyListeners();
+    state = state.copyWith(isNavigating: true, currentDestination: destination);
   }
 
   void stopNavigation() {
-    _isNavigating = false;
-    _currentDestination = null;
-    notifyListeners();
+    state = state.copyWith(isNavigating: false, currentDestination: null);
   }
 
   void setListening(bool value) {
-    _isListening = value;
-    notifyListeners();
+    state = state.copyWith(isListening: value);
   }
 }
+
+final motoristProvider = StateNotifierProvider<MotoristNotifier, MotoristState>((ref) => MotoristNotifier());

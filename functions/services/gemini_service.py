@@ -35,8 +35,8 @@ client = None
 _whisper_model = None
 
 GEMINI_MODELS = [
-    # "gemini-2.5-flash",
-    "gemini-2.5-flash-lite"
+    "gemini-2.5-flash"
+    # "gemini-2.5-flash-lite"
 ]
 
 LANGUAGE_MAP = {
@@ -308,7 +308,7 @@ def translate_text(text, target_lang):
         raise Exception("Gemini API key not configured")
 
     response = gemini_client.models.generate_content(
-        model="gemini-2.5-flash-lite",
+        model="gemini-2.5-flash",
         contents=prompt
     )
 

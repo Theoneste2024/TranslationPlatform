@@ -7,16 +7,17 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:dotted_border/dotted_border.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-class CameraTranslationScreen extends StatefulWidget {
+class CameraTranslationScreen extends ConsumerStatefulWidget {
   const CameraTranslationScreen({super.key});
 
   @override
-  State<CameraTranslationScreen> createState() =>
+  ConsumerState<CameraTranslationScreen> createState() =>
       _CameraTranslationScreenState();
 }
 
-class _CameraTranslationScreenState extends State<CameraTranslationScreen> {
+class _CameraTranslationScreenState extends ConsumerState<CameraTranslationScreen> {
   File? _selectedImage;
   String _extractedText = '';
   String _translatedText = '';

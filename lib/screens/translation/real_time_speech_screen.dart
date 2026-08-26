@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 import 'package:http/http.dart' as http;
 import 'package:speech_to_text/speech_to_text.dart' as stt;
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/constants/app_constants.dart';
 import '../../core/constants/languages.dart';
@@ -16,19 +17,19 @@ import '../../core/constants/languages.dart';
 // WIDGET
 // =============================================================================
 
-class RealTimeSpeechScreen extends StatefulWidget {
+class RealTimeSpeechScreen extends ConsumerStatefulWidget {
   const RealTimeSpeechScreen({super.key});
 
   @override
-  State<RealTimeSpeechScreen> createState() => _RealTimeSpeechScreenState();
+  ConsumerState<RealTimeSpeechScreen> createState() => _RealTimeSpeechScreenState();
 }
 
 // =============================================================================
 // STATE
 // =============================================================================
 
-class _RealTimeSpeechScreenState extends State<RealTimeSpeechScreen>
-    with SingleTickerProviderStateMixin {
+class _RealTimeSpeechScreenState extends ConsumerState<RealTimeSpeechScreen>
+  with SingleTickerProviderStateMixin {
   // ---------------------------------------------------------------------------
   // Services
   // ---------------------------------------------------------------------------

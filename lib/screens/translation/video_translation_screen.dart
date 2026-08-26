@@ -15,15 +15,16 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:permission_handler/permission_handler.dart';
 import '../../core/constants/app_constants.dart';
 import 'package:path/path.dart' as p;
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-class VideoTranslationScreen extends StatefulWidget {
+class VideoTranslationScreen extends ConsumerStatefulWidget {
   const VideoTranslationScreen({super.key});
 
   @override
-  State<VideoTranslationScreen> createState() => _VideoTranslationScreenState();
+  ConsumerState<VideoTranslationScreen> createState() => _VideoTranslationScreenState();
 }
 
-class _VideoTranslationScreenState extends State<VideoTranslationScreen> {
+class _VideoTranslationScreenState extends ConsumerState<VideoTranslationScreen> {
   // Controllers
   final TextEditingController _urlController = TextEditingController();
   late FlutterTts _flutterTts;
@@ -996,11 +997,10 @@ class _VideoTranslationScreenState extends State<VideoTranslationScreen> {
                           Text('Video', style: TextStyle(color: Colors.blue)),
                         ],
                       ),
-                      selected: _mediaType == 'video',
+                      selected: _videoSource == 'file',
                       onSelected: (selected) {
                         if (selected) {
                           _setVideoSource('file');
-                          _pickVideoFile();
                         }
                       },
                       selectedColor: Colors.white,
@@ -1121,7 +1121,54 @@ class _VideoTranslationScreenState extends State<VideoTranslationScreen> {
                         ),
                       ),
 
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 24),
+
+                    // Source & Target selectors
+                    Row(
+                      children: [
+                        Expanded(
+                          child: DropdownButtonFormField<String>(
+                            initialValue: _sourceLanguage,
+                            decoration: InputDecoration(
+                              labelText: 'Source language',
+                              filled: true,
+                              fillColor: Colors.white,
+                              border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(8)),
+                            ),
+                            items: [
+                              const DropdownMenuItem(
+                                  value: 'auto', child: Text('Auto')),
+                              ..._languages.map((l) => DropdownMenuItem(
+                                  value: l['code'], child: Text(l['name']!))),
+                            ],
+                            onChanged: (v) =>
+                                setState(() => _sourceLanguage = v ?? 'auto'),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: DropdownButtonFormField<String>(
+                            initialValue: _targetLanguage,
+                            decoration: InputDecoration(
+                              labelText: 'Target language',
+                              filled: true,
+                              fillColor: Colors.white,
+                              border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(8)),
+                            ),
+                            items: _languages
+                                .map((l) => DropdownMenuItem(
+                                    value: l['code'], child: Text(l['name']!)))
+                                .toList(),
+                            onChanged: (v) {
+                              setState(() => _targetLanguage = v ?? 'en');
+                            },
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
 
                     SizedBox(
                       width: double.infinity,
@@ -1172,55 +1219,6 @@ class _VideoTranslationScreenState extends State<VideoTranslationScreen> {
                           ),
                         ),
                       ),
-                    ),
-
-                    const SizedBox(height: 8),
-
-                    // Source & Target selectors
-                    const SizedBox(height: 12),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: DropdownButtonFormField<String>(
-                            initialValue: _sourceLanguage,
-                            decoration: InputDecoration(
-                              labelText: 'Source language',
-                              filled: true,
-                              fillColor: Colors.white,
-                              border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(8)),
-                            ),
-                            items: [
-                              const DropdownMenuItem(
-                                  value: 'auto', child: Text('Auto')),
-                              ..._languages.map((l) => DropdownMenuItem(
-                                  value: l['code'], child: Text(l['name']!))),
-                            ],
-                            onChanged: (v) =>
-                                setState(() => _sourceLanguage = v ?? 'auto'),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: DropdownButtonFormField<String>(
-                            initialValue: _targetLanguage,
-                            decoration: InputDecoration(
-                              labelText: 'Target language',
-                              filled: true,
-                              fillColor: Colors.white,
-                              border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(8)),
-                            ),
-                            items: _languages
-                                .map((l) => DropdownMenuItem(
-                                    value: l['code'], child: Text(l['name']!)))
-                                .toList(),
-                            onChanged: (v) {
-                              setState(() => _targetLanguage = v ?? 'en');
-                            },
-                          ),
-                        ),
-                      ],
                     ),
                   ],
                 ),
