@@ -3,7 +3,7 @@ import 'package:connectivity_plus/connectivity_plus.dart';
 
 class OfflineProvider extends ChangeNotifier {
   bool _isOnline = true;
-  List<String> _downloadedPacks = [];
+  final List<String> _downloadedPacks = [];
   int _activeDownloads = 0;
   final Connectivity _connectivity = Connectivity();
 

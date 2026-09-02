@@ -5,10 +5,10 @@ class HandsFreeButton extends StatelessWidget {
   final bool isListening;
 
   const HandsFreeButton({
-    Key? key,
+    super.key,
     required this.onPressed,
     this.isListening = false,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {

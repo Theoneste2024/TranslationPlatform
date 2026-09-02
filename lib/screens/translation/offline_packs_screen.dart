@@ -1,10 +1,11 @@
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../providers/offline_provider.dart';
 import '../../core/constants/languages.dart';
 
 class OfflinePacksScreen extends StatefulWidget {
-  const OfflinePacksScreen({Key? key}) : super(key: key);
+  const OfflinePacksScreen({super.key});
 
   @override
   State<OfflinePacksScreen> createState() => _OfflinePacksScreenState();
@@ -282,7 +283,7 @@ class _OfflinePacksScreenState extends State<OfflinePacksScreen> {
                                   ],
                                 ),
                               );
-                            }).toList(),
+                            }),
                           ],
                         ),
                         const SizedBox(height: 16),
@@ -385,7 +386,7 @@ class _OfflinePacksScreenState extends State<OfflinePacksScreen> {
                                   _downloadPack(context, pack);
                                 },
                                 icon: const Icon(Icons.download, size: 18),
-                                label: Text(
+                                label: const Text(
                                   'Download', // All packs are free now
                                 ),
                                 style: ElevatedButton.styleFrom(

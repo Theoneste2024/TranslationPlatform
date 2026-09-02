@@ -1,15 +1,19 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 import 'package:flutter_tts/flutter_tts.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:http/http.dart' as http;
+import 'package:permission_handler/permission_handler.dart';
 import 'dart:convert';
 import '../../core/constants/languages.dart';
 import 'package:flutter/services.dart';
+import 'web_speech_recognizer_stub.dart'
+    if (dart.library.html) 'web_speech_recognizer_web.dart';
 
 class RealTimeSpeechScreen extends StatefulWidget {
-  const RealTimeSpeechScreen({Key? key}) : super(key: key);
+  const RealTimeSpeechScreen({super.key});
 
   @override
   State<RealTimeSpeechScreen> createState() => _RealTimeSpeechScreenState();
@@ -20,32 +24,36 @@ class _RealTimeSpeechScreenState extends State<RealTimeSpeechScreen>
   // Speech & TTS
   late stt.SpeechToText _speech;
   late FlutterTts _flutterTts;
+  late WebSpeechRecognizer _webSpeechRecognizer;
   final AudioPlayer _audioPlayer = AudioPlayer();
-  
+
   // UI States
   bool _isListening = false;
   bool _isTranslating = false;
   bool _isPlayingAudio = false;
   bool _isUploading = false;
-  
+
   // Text Content
   String _recognizedText = '';
   String _translatedText = '';
   String _sourceLanguage = 'en';
   String _targetLanguage = 'fr';
   double _confidence = 0.0;
-  
+
   // Output Options
   bool _outputText = true;
   bool _outputAudio = true;
-  
+
   // Animation
   late AnimationController _animationController;
-  
+
   // Audio File Upload
   PlatformFile? _selectedAudioFile;
   String? _fileName;
-  
+
+    static const String speechApiUrl =
+      'http://127.0.0.1:5011/translationplatform-c24e2/us-central1/speech_translate';
+
   // History
   final List<Map<String, dynamic>> _conversationHistory = [];
 
@@ -53,13 +61,14 @@ class _RealTimeSpeechScreenState extends State<RealTimeSpeechScreen>
   void initState() {
     super.initState();
     _speech = stt.SpeechToText();
+    _webSpeechRecognizer = WebSpeechRecognizer();
     _flutterTts = FlutterTts();
     _animationController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1500),
     );
     _initTTS();
-    
+
     // Set up audio player completion handler
     _audioPlayer.onPlayerComplete.listen((event) {
       setState(() => _isPlayingAudio = false);
@@ -77,84 +86,232 @@ class _RealTimeSpeechScreenState extends State<RealTimeSpeechScreen>
 
   // ============ TEXT-TO-SPEECH INIT ============
   Future<void> _initTTS() async {
-  String locale = _targetLanguage == 'fr' ? 'fr-FR' : 'en-US';
+    String locale = _targetLanguage == 'fr' ? 'fr-FR' : 'en-US';
 
-  await _flutterTts.setLanguage(locale);
-  await _flutterTts.setSpeechRate(0.5);
-  await _flutterTts.setVolume(1.0);
-  await _flutterTts.setPitch(1.0);
+    await _flutterTts.setLanguage(locale);
+    await _flutterTts.setSpeechRate(0.5);
+    await _flutterTts.setVolume(1.0);
+    await _flutterTts.setPitch(1.0);
 
-  _flutterTts.setCompletionHandler(() {
-    setState(() => _isPlayingAudio = false);
-  });
-}
-  // ============ LIVE RECORDING ============
-  Future<void> _startListening() async {
-  bool available = await _speech.initialize(
-    onStatus: (status) {
-      debugPrint('Speech status: $status');
-
-      if (status == 'done' || status == 'notListening') {
-        setState(() => _isListening = false);
-        _animationController.stop();
-      }
-    },
-    onError: (error) {
-      debugPrint('Speech error: $error');
-      setState(() => _isListening = false);
-      _animationController.stop();
-      _showSnackBar('Speech recognition error', Colors.red);
-    },
-  );
-
-  if (!available) {
-    _showSnackBar('Speech recognition not available', Colors.red);
-    return;
+    _flutterTts.setCompletionHandler(() {
+      setState(() => _isPlayingAudio = false);
+    });
   }
 
-  setState(() {
-    _isListening = true;
-    _recognizedText = '';
-  });
+  // ============ LIVE RECORDING ============
+  Future<void> _startListening() async {
+    if (_isListening || _isTranslating) return;
 
-  _animationController.repeat(reverse: true);
+    if (kIsWeb) {
+      await _startWebListening();
+      return;
+    }
 
-  await _speech.listen(
-    onResult: (result) async {
-      setState(() {
-        _recognizedText = result.recognizedWords;
-        _confidence = result.confidence;
-      });
+    // Native platforms still need explicit microphone permission.
+    PermissionStatus status = await Permission.microphone.request();
 
-      // Trigger translation only when final result
-      if (result.finalResult && result.recognizedWords.isNotEmpty) {
-        await _translateText(result.recognizedWords);
-      }
-    },
-    localeId: _getLocaleFromLanguage(_sourceLanguage),
-    listenMode: stt.ListenMode.confirmation,
-    partialResults: true,
-  );
-}
+    if (!status.isGranted) {
+      _showSnackBar(
+          'Microphone permission is required to use speech recognition',
+          Colors.red);
+      return;
+    }
+
+    bool available = await _speech.initialize(
+      onStatus: (status) {
+        debugPrint('Speech status: $status');
+
+        if (status == 'done' || status == 'notListening') {
+          if (!mounted) return;
+          setState(() => _isListening = false);
+          _animationController.stop();
+        }
+      },
+      onError: (error) {
+        debugPrint('Speech error: $error');
+        if (!mounted) return;
+        setState(() => _isListening = false);
+        _animationController.stop();
+        String errorMsg = error.toString();
+        // Handle both error objects and generic events (web compatibility)
+        if (errorMsg.contains('network') || errorMsg.contains('no-speech')) {
+          _showSnackBar('No speech detected. Please try again.', Colors.orange);
+        } else if (errorMsg.contains('not-allowed') ||
+            errorMsg.contains('permission')) {
+          _showSnackBar('Microphone permission denied', Colors.red);
+        } else {
+          _showSnackBar('Speech recognition error', Colors.red);
+        }
+      },
+    );
+
+    if (!available) {
+      _showSnackBar(
+        kIsWeb
+            ? 'Speech recognition is not available. Please use Chrome and allow microphone access.'
+            : 'Speech recognition not available',
+        Colors.red,
+      );
+      return;
+    }
+
+    setState(() {
+      _isListening = true;
+      _recognizedText = '';
+    });
+
+    _animationController.repeat(reverse: true);
+
+    try {
+      await _speech.listen(
+        onResult: (result) async {
+          debugPrint('WORDS: ${result.recognizedWords}');
+          debugPrint('FINAL: ${result.finalResult}');
+
+          setState(() {
+            _recognizedText = result.recognizedWords;
+            _confidence = result.confidence;
+          });
+
+          if (result.finalResult && result.recognizedWords.isNotEmpty) {
+            await _translateText(result.recognizedWords);
+          }
+        },
+        localeId: _getLocaleFromLanguage(_sourceLanguage),
+        listenFor: const Duration(seconds: 30),
+        pauseFor: const Duration(seconds: 3),
+        listenOptions: stt.SpeechListenOptions(
+          listenMode: stt.ListenMode.confirmation,
+          partialResults: true,
+          cancelOnError: true,
+        ),
+        onSoundLevelChange: (level) {
+          debugPrint('Sound level: $level');
+        },
+      );
+    } catch (e) {
+      debugPrint('Error during speech listen: $e');
+      setState(() => _isListening = false);
+      _animationController.stop();
+      _showSnackBar(
+          'Could not start listening. Please allow microphone access and try again.',
+          Colors.red);
+    }
+  }
+
+  Future<void> _startWebListening() async {
+    final available = _webSpeechRecognizer.initialize(
+      onStatus: (status) {
+        debugPrint('Web speech status: $status');
+
+        if (status == 'done' || status == 'notListening') {
+          if (!mounted) return;
+          setState(() => _isListening = false);
+          _animationController.stop();
+        }
+      },
+      onError: (message) {
+        debugPrint('Web speech error: $message');
+        if (!mounted) return;
+        setState(() => _isListening = false);
+        _animationController.stop();
+        
+        // Always show the error message to the user
+        final errorMsg = message.toLowerCase();
+        if (errorMsg.contains('permission')) {
+          _showSnackBar(
+            'Microphone Permission Required: Click the lock icon in the browser address bar and select "Allow" for microphone.',
+            Colors.red,
+          );
+        } else if (errorMsg.contains('no')) {
+          _showSnackBar(
+            'No speech detected. Speak clearly and try again.',
+            Colors.orange,
+          );
+        } else if (errorMsg.contains('microphone detected') || errorMsg.contains('audio input')) {
+          _showSnackBar(
+            'No microphone detected. Please connect a microphone.',
+            Colors.red,
+          );
+        } else {
+          _showSnackBar(message, Colors.red);
+        }
+      },
+      onResult: (words, confidence, isFinal) async {
+        debugPrint('WEB WORDS: $words');
+        debugPrint('WEB FINAL: $isFinal');
+        if (!mounted) return;
+
+        setState(() {
+          _recognizedText = words;
+          _confidence = confidence;
+        });
+
+        if (isFinal && words.isNotEmpty) {
+          await _translateText(words);
+        }
+      },
+    );
+
+    if (!available) {
+      _showSnackBar(
+        'Speech recognition is not available. Please use Chrome/Edge and allow microphone access.',
+        Colors.red,
+      );
+      return;
+    }
+
+    setState(() {
+      _isListening = true;
+      _recognizedText = '';
+    });
+
+    _showSnackBar(
+      'Microphone ready. Speak clearly now.',
+      Colors.green,
+    );
+
+    _animationController.repeat(reverse: true);
+
+    try {
+      await _webSpeechRecognizer.listen(
+        localeId: _getLocaleFromLanguage(_sourceLanguage),
+      );
+    } catch (e) {
+      debugPrint('Error during web speech listen: $e');
+      if (!mounted) return;
+      setState(() => _isListening = false);
+      _animationController.stop();
+      _showSnackBar(
+        'Could not start listening. Error: $e',
+        Colors.red,
+      );
+    }
+  }
 
 // ============ STOP LISTENING ============
-Future<void> _stopListening() async {
-  await _speech.stop();
-  _animationController.stop();
+  Future<void> _stopListening() async {
+    if (kIsWeb) {
+      await _webSpeechRecognizer.stop();
+    } else {
+      await _speech.stop();
+    }
+    _animationController.stop();
 
-  setState(() {
-    _isListening = false;
-  });
-}
+    setState(() {
+      _isListening = false;
+    });
+  }
 
   // ============ UPLOAD AUDIO FILE ============
   Future<void> _pickAudioFile() async {
     try {
       FilePickerResult? result = await FilePicker.platform.pickFiles(
-  type: FileType.custom,
-  allowMultiple: false,
-  allowedExtensions: ['mp3', 'wav', 'm4a', 'aac', 'ogg'],
-);
+        type: FileType.custom,
+        allowMultiple: false,
+        withData: true, // IMPORTANT
+        allowedExtensions: ['mp3', 'wav', 'm4a', 'aac', 'ogg'],
+      );
 
       if (result != null) {
         setState(() {
@@ -162,18 +319,13 @@ Future<void> _stopListening() async {
           _fileName = result.files.single.name;
           _isUploading = true;
         });
-        
+
         _showSnackBar('✅ Audio selected: $_fileName', Colors.green);
-        
+
         // In a real app, you'd process the audio file here
         // For demo, we'll simulate transcription
-        await Future.delayed(const Duration(seconds: 2));
-        
-        setState(() {
-          _recognizedText = "This is transcribed text from the uploaded audio file. In a production app, this would use a proper speech-to-text API to convert the audio to text.";
-          _isUploading = false;
-        });
-        
+        await _uploadAudioAndTranslate();
+
         _showSnackBar('✅ Audio transcribed successfully!', Colors.green);
       }
     } catch (e) {
@@ -182,86 +334,121 @@ Future<void> _stopListening() async {
     }
   }
 
+  Future<void> _uploadAudioAndTranslate() async {
+    if (_selectedAudioFile == null) return;
+
+    try {
+      var request = http.MultipartRequest(
+        'POST',
+        Uri.parse(speechApiUrl),
+      );
+
+      request.fields['source_language'] = _getLanguageName(_sourceLanguage);
+
+      request.fields['target_language'] = _getLanguageName(_targetLanguage);
+
+      request.files.add(
+        http.MultipartFile.fromBytes(
+          'audio',
+          _selectedAudioFile!.bytes!,
+          filename: _selectedAudioFile!.name,
+        ),
+      );
+
+      final streamedResponse = await request.send();
+
+      final response = await http.Response.fromStream(streamedResponse);
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+
+        setState(() {
+          _recognizedText = data['original_text'];
+          _translatedText = data['translated_text'];
+          _isUploading = false;
+        });
+
+        await _handleOutput();
+
+        _showSnackBar(
+          'Translation completed',
+          Colors.green,
+        );
+      } else {
+        throw Exception(response.body);
+      }
+    } catch (e) {
+      setState(() => _isUploading = false);
+
+      _showSnackBar(
+        'Translation failed: $e',
+        Colors.red,
+      );
+    }
+  }
+
   // ============ TRANSLATE TEXT ============
   Future<void> _translateText(String text) async {
-  if (text.isEmpty) return;
+    if (text.isEmpty) return;
 
-  // Allow ONLY English <-> French for now
-  bool isSupportedPair =
-      (_sourceLanguage == 'en' && _targetLanguage == 'fr') ||
-      (_sourceLanguage == 'fr' && _targetLanguage == 'en');
+    setState(() => _isTranslating = true);
 
-  if (!isSupportedPair) {
-    _showSnackBar(
-      '🚧 This language pair will be available soon.',
-      Colors.orange,
-    );
-    return;
-  }
+    try {
+        final url = Uri.parse(
+          'http://127.0.0.1:5011/translationplatform-c24e2/us-central1/translate_text');
 
-  setState(() => _isTranslating = true);
+      final response = await http.post(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode({
+          'text': text,
+          'source_language': _sourceLanguage,
+          'target_language': _targetLanguage,
+        }),
+      );
 
-  try {
-    final url = Uri.parse(
-      'https://api.mymemory.translated.net/get'
-      '?q=${Uri.encodeComponent(text)}'
-      '&langpair=${_sourceLanguage}|${_targetLanguage}',
-    );
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
 
-    final response = await http.get(url);
+        final translated = data['translated_text']?.toString() ?? '';
 
-    if (response.statusCode == 200) {
-      final data = json.decode(response.body);
+        setState(() {
+          _translatedText = translated;
+          _isTranslating = false;
+        });
 
-      final translated =
-          data['responseData']?['translatedText']?.toString() ?? '';
+        _conversationHistory.add({
+          'source': text,
+          'translated': _translatedText,
+          'sourceLang': _sourceLanguage,
+          'targetLang': _targetLanguage,
+          'time': DateTime.now(),
+          'type': 'live',
+        });
 
-      setState(() {
-        _translatedText = translated;
-        _isTranslating = false;
-      });
-
-      // Add to history
-      _conversationHistory.add({
-        'source': text,
-        'translated': _translatedText,
-        'sourceLang': _sourceLanguage,
-        'targetLang': _targetLanguage,
-        'time': DateTime.now(),
-        'type': 'live',
-      });
-
-      await _handleOutput();
-    } else {
-      throw Exception('Translation failed');
-    }
-  } catch (e) {
-    setState(() => _isTranslating = false);
-
-    // Controlled fallback ONLY for English/French
-    setState(() {
-      if (_sourceLanguage == 'en' && _targetLanguage == 'fr') {
-        _translatedText = 'Bonjour';
-      } else if (_sourceLanguage == 'fr' && _targetLanguage == 'en') {
-        _translatedText = 'Hello';
+        await _handleOutput();
+      } else {
+        throw Exception('Translation failed');
       }
-    });
+    } catch (e) {
+      setState(() => _isTranslating = false);
 
-    _showSnackBar(
-      '⚠️ Using demo translation (API unavailable)',
-      Colors.orange,
-    );
-
-    await _handleOutput();
+      _showSnackBar(
+        'Translation failed: $e',
+        Colors.red,
+      );
+    }
   }
-}
+
   // ============ HANDLE OUTPUT (TEXT/AUDIO/BOTH) ============
   Future<void> _handleOutput() async {
-  if (_outputAudio && _translatedText.isNotEmpty) {
-    setState(() => _isPlayingAudio = true);
-    await _flutterTts.speak(_translatedText);
+    if (_outputAudio && _translatedText.isNotEmpty) {
+      setState(() => _isPlayingAudio = true);
+      await _flutterTts.speak(_translatedText);
+    }
   }
-}
 
   // ============ PLAY/STOP AUDIO ============
   void _toggleAudioPlayback() {
@@ -288,26 +475,29 @@ Future<void> _stopListening() async {
 
   // ============ LOCALE HELPER ============
   String _getLocaleFromLanguage(String languageCode) {
-  switch (languageCode) {
-    case 'en':
-      return 'en_US';
-    case 'fr':
-      return 'fr_FR';
-    default:
-      return 'en_US';
+    switch (languageCode) {
+      case 'en':
+        return 'en_US';
+      case 'fr':
+        return 'fr_FR';
+      case 'rw':
+        return 'rw_RW';
+      default:
+        return 'en_US';
+    }
   }
-}
 
   // ============ SWAP LANGUAGES ============
   void _swapLanguages() {
-  setState(() {
-    final temp = _sourceLanguage;
-    _sourceLanguage = _targetLanguage;
-    _targetLanguage = temp;
-  });
+    setState(() {
+      final temp = _sourceLanguage;
+      _sourceLanguage = _targetLanguage;
+      _targetLanguage = temp;
+    });
 
-  _initTTS();
-}
+    _initTTS();
+  }
+
   // ============ UI HELPERS ============
   void _showSnackBar(String message, Color color) {
     ScaffoldMessenger.of(context).showSnackBar(
@@ -362,7 +552,7 @@ Future<void> _stopListening() async {
                     },
                     selectedColor: Colors.white,
                     backgroundColor: Colors.white.withOpacity(0.2),
-                    labelStyle: const TextStyle(color: Colors.white),
+                    labelStyle: const TextStyle(color: Colors.black),
                   ),
                 ),
                 const SizedBox(width: 8),
@@ -382,7 +572,7 @@ Future<void> _stopListening() async {
                     },
                     selectedColor: Colors.white,
                     backgroundColor: Colors.white.withOpacity(0.2),
-                    labelStyle: const TextStyle(color: Colors.white),
+                    labelStyle: const TextStyle(color: Colors.black),
                   ),
                 ),
               ],
@@ -433,9 +623,9 @@ Future<void> _stopListening() async {
                         ),
                       ],
                     ),
-                    
+
                     const SizedBox(height: 16),
-                    
+
                     // Output Options
                     Container(
                       padding: const EdgeInsets.all(12),
@@ -585,14 +775,22 @@ Future<void> _stopListening() async {
                       animation: _animationController,
                       builder: (context, child) {
                         return GestureDetector(
-                          onTap: _isListening ? _stopListening : _startListening,
+                          onTap:
+                              _isListening ? _stopListening : _startListening,
                           child: Container(
-                            width: 200 + (_isListening ? (_animationController.value * 50) : 0),
-                            height: 200 + (_isListening ? (_animationController.value * 50) : 0),
+                            width: 200 +
+                                (_isListening
+                                    ? (_animationController.value * 50)
+                                    : 0),
+                            height: 200 +
+                                (_isListening
+                                    ? (_animationController.value * 50)
+                                    : 0),
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
                               color: _isListening
-                                  ? Colors.red.withOpacity(0.3 - (_animationController.value * 0.1))
+                                  ? Colors.red.withOpacity(
+                                      0.3 - (_animationController.value * 0.1))
                                   : Colors.blue.withOpacity(0.1),
                             ),
                             child: Center(
@@ -601,10 +799,14 @@ Future<void> _stopListening() async {
                                 height: 150,
                                 decoration: BoxDecoration(
                                   shape: BoxShape.circle,
-                                  color: _isListening ? Colors.red : Colors.blue,
+                                  color:
+                                      _isListening ? Colors.red : Colors.blue,
                                   boxShadow: [
                                     BoxShadow(
-                                      color: (_isListening ? Colors.red : Colors.blue).withOpacity(0.3),
+                                      color: (_isListening
+                                              ? Colors.red
+                                              : Colors.blue)
+                                          .withOpacity(0.3),
                                       blurRadius: 20,
                                       spreadRadius: 5,
                                     ),
@@ -671,7 +873,8 @@ Future<void> _stopListening() async {
                               color: Colors.blue.shade50,
                               shape: BoxShape.circle,
                             ),
-                            child: const Icon(Icons.mic, color: Colors.blue, size: 20),
+                            child: const Icon(Icons.mic,
+                                color: Colors.blue, size: 20),
                           ),
                           const SizedBox(width: 12),
                           Expanded(
@@ -730,11 +933,12 @@ Future<void> _stopListening() async {
                         children: [
                           Container(
                             padding: const EdgeInsets.all(8),
-                            decoration: BoxDecoration(
+                            decoration: const BoxDecoration(
                               color: Colors.white,
                               shape: BoxShape.circle,
                             ),
-                            child: const Icon(Icons.translate, color: Colors.blue, size: 20),
+                            child: const Icon(Icons.translate,
+                                color: Colors.blue, size: 20),
                           ),
                           const SizedBox(width: 12),
                           Expanded(
@@ -776,9 +980,9 @@ Future<void> _stopListening() async {
                           height: 1.5,
                         ),
                       ),
-                      
+
                       const SizedBox(height: 16),
-                      
+
                       // Action Buttons
                       Row(
                         mainAxisAlignment: MainAxisAlignment.end,
@@ -786,9 +990,11 @@ Future<void> _stopListening() async {
                           IconButton(
                             icon: const Icon(Icons.copy),
                             onPressed: () async {
-                              await Clipboard.setData(ClipboardData(text: _translatedText));
-                              _showSnackBar('Copied to clipboard!', Colors.green);
-},
+                              await Clipboard.setData(
+                                  ClipboardData(text: _translatedText));
+                              _showSnackBar(
+                                  'Copied to clipboard!', Colors.green);
+                            },
                             color: Colors.blue,
                           ),
                           IconButton(
@@ -803,7 +1009,8 @@ Future<void> _stopListening() async {
                             icon: const Icon(Icons.share),
                             onPressed: () {
                               // Share
-                              _showSnackBar('Share feature coming soon!', Colors.orange);
+                              _showSnackBar(
+                                  'Share feature coming soon!', Colors.orange);
                             },
                             color: Colors.blue,
                           ),
@@ -856,7 +1063,8 @@ Future<void> _stopListening() async {
                                       color: Colors.grey,
                                     ),
                                   ),
-                                  const Icon(Icons.arrow_forward, size: 12, color: Colors.grey),
+                                  const Icon(Icons.arrow_forward,
+                                      size: 12, color: Colors.grey),
                                   const SizedBox(width: 4),
                                   Text(
                                     _getLanguageName(item['targetLang']),
@@ -919,24 +1127,18 @@ Future<void> _stopListening() async {
             ...Languages.africanLanguages.map((lang) {
               return DropdownMenuItem(
                 value: lang.code,
-                child: Row(
-                  children: [
-                    Text(lang.flagEmoji),
-                    const SizedBox(width: 8),
-                    Text(lang.nativeName),
-                  ],
+                child: Text(
+                  '${lang.flagEmoji} ${lang.nativeName}',
+                  overflow: TextOverflow.ellipsis,
                 ),
               );
             }),
             ...Languages.globalLanguages.map((lang) {
               return DropdownMenuItem(
                 value: lang.code,
-                child: Row(
-                  children: [
-                    Text(lang.flagEmoji),
-                    const SizedBox(width: 8),
-                    Text(lang.nativeName),
-                  ],
+                child: Text(
+                  '${lang.flagEmoji} ${lang.nativeName}',
+                  overflow: TextOverflow.ellipsis,
                 ),
               );
             }),
