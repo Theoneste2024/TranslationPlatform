@@ -10,7 +10,7 @@ import '../maps/google_maps_screen.dart';
 import '../settings/settings_screen.dart';
 
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({Key? key}) : super(key: key);
+  const HomeScreen({super.key});
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -96,12 +96,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Container _buildAppBarGradient() {
     return Container(
       decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          colors: [_blueColor, _greenColor, _yellowColor],
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          stops: [0.3, 0.6, 1.0],
-        ),
+        color: Color.fromARGB(255, 33, 150, 243),
       ),
     );
   }
@@ -113,13 +108,15 @@ class _HomeScreenState extends State<HomeScreen> {
       child: Center(
         child: Padding(
           padding: const EdgeInsets.all(23.0),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              _buildIconCircle(),
-              const SizedBox(height: 30),
-              _buildContentCard(),
-            ],
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                _buildIconCircle(),
+                const SizedBox(height: 30),
+                _buildContentCard(),
+              ],
+            ),
           ),
         ),
       ),
@@ -128,12 +125,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   BoxDecoration _buildBodyGradient() {
     return const BoxDecoration(
-      gradient: LinearGradient(
-        begin: Alignment.topCenter,
-        end: Alignment.bottomCenter,
-        colors: [_blueColor, _greenColor, _yellowColor],
-        stops: [0.2, 0.5, 0.9],
-      ),
+      color: Color.fromARGB(255, 33, 150, 243),
     );
   }
 
@@ -226,7 +218,7 @@ class _HomeScreenState extends State<HomeScreen> {
     return const Text(
       'For Driver\'s, Tourists, Students, and Everyone!',
       style: TextStyle(
-        color: _yellowColor,
+        color: _greenColor,
         fontWeight: FontWeight.w500,
         fontSize: 14,
       ),
@@ -317,12 +309,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   BoxDecoration _buildDrawerGradient() {
     return const BoxDecoration(
-      gradient: LinearGradient(
-        begin: Alignment.topCenter,
-        end: Alignment.bottomCenter,
-        colors: [_blueColor, _greenColor, _yellowColor],
-        stops: [0.1, 0.5, 0.9],
-      ),
+      color: Color.fromARGB(255, 5, 93, 166),
     );
   }
 
@@ -330,11 +317,7 @@ class _HomeScreenState extends State<HomeScreen> {
     return Container(
       height: 180,
       decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          colors: [_blueColor, _greenColor, _yellowColor],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
+        color: Color.fromARGB(255, 5, 93, 166),
       ),
       child: const Padding(
         padding: EdgeInsets.all(20),

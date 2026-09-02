@@ -9,7 +9,7 @@ import 'package:dotted_border/dotted_border.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 class CameraTranslationScreen extends StatefulWidget {
-  const CameraTranslationScreen({Key? key}) : super(key: key);
+  const CameraTranslationScreen({super.key});
 
   @override
   State<CameraTranslationScreen> createState() =>
@@ -236,9 +236,9 @@ class _CameraTranslationScreenState extends State<CameraTranslationScreen> {
                       height: 200,
                       width: double.infinity,
                       alignment: Alignment.center,
-                      child: Column(
+                      child: const Column(
                         mainAxisAlignment: MainAxisAlignment.center,
-                        children: const [
+                        children: [
                           Icon(Icons.camera_alt, size: 60),
                           SizedBox(height: 10),
                           Text("Take or Upload Image"),

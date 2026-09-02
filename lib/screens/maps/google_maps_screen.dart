@@ -10,7 +10,7 @@ import 'dart:convert';
 import 'package:flutter_nominatim/flutter_nominatim.dart';
 
 class GoogleMapsScreen extends StatefulWidget {
-  const GoogleMapsScreen({Key? key}) : super(key: key);
+  const GoogleMapsScreen({super.key});
 
   @override
   State<GoogleMapsScreen> createState() => _GoogleMapsScreenState();

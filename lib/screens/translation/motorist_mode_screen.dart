@@ -1,4 +1,4 @@
-import 'dart:math'; // ✅ Added for future distance calculations
+// ✅ Added for future distance calculations
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:geolocator/geolocator.dart';
@@ -6,13 +6,10 @@ import 'package:flutter_map/flutter_map.dart'; // ✅ FREE OSM - NO API KEY
 import 'package:latlong2/latlong.dart'; // ✅ FREE coordinates
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 import 'package:flutter_tts/flutter_tts.dart';
-import '../../core/constants/languages.dart';
 import '../../providers/motorist_provider.dart';
-import '../../widgets/motorist/hands_free_button.dart';
-import '../../widgets/motorist/voice_command_listener.dart';
 
 class MotoristModeScreen extends StatefulWidget {
-  const MotoristModeScreen({Key? key}) : super(key: key);
+  const MotoristModeScreen({super.key});
 
   @override
   State<MotoristModeScreen> createState() => _MotoristModeScreenState();
@@ -314,7 +311,7 @@ class _MotoristModeScreenState extends State<MotoristModeScreen>
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(
+                            const Text(
                               'Motorist Mode Active',
                               style: TextStyle(
                                 color: Colors.white,
@@ -326,7 +323,7 @@ class _MotoristModeScreenState extends State<MotoristModeScreen>
                               _isListening
                                   ? 'Listening for commands...'
                                   : 'Tap to activate',
-                              style: TextStyle(
+                              style: const TextStyle(
                                 color: Colors.white70,
                                 fontSize: 12,
                               ),
@@ -420,7 +417,7 @@ class _MotoristModeScreenState extends State<MotoristModeScreen>
                                     _isNavigating
                                         ? 'Follow the route'
                                         : 'Tap to start navigation',
-                                    style: TextStyle(
+                                    style: const TextStyle(
                                       color: Colors.white70,
                                       fontSize: 12,
                                     ),
@@ -495,7 +492,7 @@ class _MotoristModeScreenState extends State<MotoristModeScreen>
               padding: const EdgeInsets.only(bottom: 12),
               child: Row(
                 children: [
-                  Icon(Icons.mic, color: Colors.green, size: 20),
+                  const Icon(Icons.mic, color: Colors.green, size: 20),
                   const SizedBox(width: 12),
                   Text(
                     '"$command"',

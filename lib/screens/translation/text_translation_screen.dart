@@ -1,9 +1,16 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_tts/flutter_tts.dart';
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
+import 'dart:async';
+
+import '../home/home_screen.dart';
 
 class TextTranslationScreen extends StatefulWidget {
-  const TextTranslationScreen({Key? key}) : super(key: key);
+  const TextTranslationScreen({super.key});
 
   @override
   State<TextTranslationScreen> createState() => _TextTranslationScreenState();
@@ -12,9 +19,25 @@ class TextTranslationScreen extends StatefulWidget {
 class _TextTranslationScreenState extends State<TextTranslationScreen> {
   final TextEditingController _sourceController = TextEditingController();
   final TextEditingController _targetController = TextEditingController();
+  final FlutterTts _flutterTts = FlutterTts();
+  String _lastTranslatedInput = '';
   String _sourceLanguage = 'en';
   String _targetLanguage = 'fr';
   bool _isTranslating = false;
+  bool _isSpeaking = false;
+  final Set<String> _favoriteTranslations = {};
+
+  static const String _favoritesKey = 'text_translation_favorites';
+
+  String get _translationUrl {
+    final host = kIsWeb
+        ? '127.0.0.1'
+        : defaultTargetPlatform == TargetPlatform.android
+            ? '10.0.2.2'
+            : '127.0.0.1';
+
+    return 'http://$host:5011/translationplatform-c24e2/us-central1/translate_text';
+  }
 
   final List<Map<String, String>> _languages = [
     {'code': 'en', 'name': 'English', 'flag': '🇬🇧'},
@@ -23,93 +46,134 @@ class _TextTranslationScreenState extends State<TextTranslationScreen> {
   ];
 
   @override
+  void initState() {
+    super.initState();
+    _sourceController.addListener(_handleTextChanged);
+    _targetController.addListener(_handleTextChanged);
+    _initTts();
+    _loadFavorites();
+  }
+
+  void _handleTextChanged() {
+    if (!mounted) return;
+
+    final sourceText = _sourceController.text.trim();
+    if (!_isTranslating &&
+        _targetController.text.isNotEmpty &&
+        sourceText != _lastTranslatedInput) {
+      _flutterTts.stop();
+      _isSpeaking = false;
+      _lastTranslatedInput = '';
+      _targetController.clear();
+    }
+
+    setState(() {});
+  }
+
+  Future<void> _initTts() async {
+    await _flutterTts.setSpeechRate(0.5);
+    await _flutterTts.setVolume(1.0);
+    await _flutterTts.setPitch(1.0);
+    _flutterTts.setCompletionHandler(() {
+      if (mounted) {
+        setState(() => _isSpeaking = false);
+      }
+    });
+  }
+
+  Future<void> _loadFavorites() async {
+    final prefs = await SharedPreferences.getInstance();
+    final favorites = prefs.getStringList(_favoritesKey) ?? <String>[];
+    if (!mounted) return;
+    setState(() {
+      _favoriteTranslations
+        ..clear()
+        ..addAll(favorites);
+    });
+  }
+
+  @override
   void dispose() {
+    _sourceController.removeListener(_handleTextChanged);
+    _targetController.removeListener(_handleTextChanged);
     _sourceController.dispose();
     _targetController.dispose();
+    _flutterTts.stop();
     super.dispose();
   }
 
-  // ✅ REAL TRANSLATION USING MyMemory API - FREE, NO KEY NEEDED!
+  // ✅ REAL TRANSLATION FUNCTION (calls backend API)
   Future<void> _translate() async {
-    if (_sourceController.text.isEmpty) return;
-    
+    final text = _sourceController.text.trim();
+    if (text.isEmpty) return;
+
     setState(() => _isTranslating = true);
-    
+
     try {
-      // MyMemory Translation API - Completely Free, No API Key Required
-      final url = Uri.parse(
-        'https://api.mymemory.translated.net/get?q=${Uri.encodeComponent(_sourceController.text)}&langpair=${_sourceLanguage}|${_targetLanguage}'
-      );
-      
-      final response = await http.get(url);
-      
+      final url = Uri.parse(_translationUrl);
+
+      final response = await http.post(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode({
+          "text": text,
+          "source_language": _getLanguageName(_sourceLanguage),
+          "target_language": _getLanguageName(_targetLanguage),
+        }),
+      ).timeout(const Duration(seconds: 20));
+
+      final data = jsonDecode(response.body);
+
       if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        
+        final translatedText = data['translated_text'] ?? '';
+        _lastTranslatedInput = text;
         setState(() {
-          _targetController.text = data['responseData']['translatedText'];
-          _isTranslating = false;
+          _targetController.text = translatedText;
         });
-        
-        // Show success message
+
+        if (!mounted) return;
+
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('✅ Translated successfully!'),
+          const SnackBar(
+            content: Text("Translation successful"),
             backgroundColor: Colors.green,
-            duration: const Duration(seconds: 1),
           ),
         );
       } else {
-        throw Exception('Translation failed');
+        throw Exception(data["error"]);
       }
-    } catch (e) {
-      setState(() => _isTranslating = false);
-      
-      // ❌ FALLBACK: If API fails, show demo translation
+    } on TimeoutException {
+      if (!mounted) return;
       setState(() {
-        _targetController.text = _getDemoTranslation(_sourceController.text);
+        _targetController.clear();
+        _lastTranslatedInput = '';
+        _isSpeaking = false;
       });
-      
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('⚠️ Using offline translation (API unavailable)'),
-          backgroundColor: Colors.orange,
-          duration: const Duration(seconds: 2),
+        const SnackBar(
+          content: Text('Translation is taking longer than expected. Please try again.'),
+          backgroundColor: Colors.red,
         ),
       );
-    }
-  }
-
-  // ✅ FALLBACK DEMO TRANSLATIONS (when no internet)
-  String _getDemoTranslation(String text) {
-    String lowerText = text.toLowerCase();
-    
-    if (_sourceLanguage == 'en' && _targetLanguage == 'rw') {
-      if (lowerText.contains('hello')) return 'Muraho';
-      if (lowerText.contains('how are you')) return 'Amakuru';
-      if (lowerText.contains('thank you')) return 'Urakoze';
-      if (lowerText.contains('good morning')) return 'Mwaramutse';
-      if (lowerText.contains('good evening')) return 'Mwiriwe';
-      if (lowerText.contains('welcome')) return 'Murakaza neza';
-      if (lowerText.contains('goodbye')) return 'Murabeho';
-      return 'Translation: $text';
-    }
-    else if (_sourceLanguage == 'en' && _targetLanguage == 'fr') {
-      if (lowerText.contains('hello')) return 'Bonjour';
-      if (lowerText.contains('how are you')) return 'Comment allez-vous';
-      if (lowerText.contains('thank you')) return 'Merci';
-      if (lowerText.contains('good morning')) return 'Bonjour';
-      if (lowerText.contains('good evening')) return 'Bonsoir';
-      if (lowerText.contains('welcome')) return 'Bienvenue';
-      if (lowerText.contains('goodbye')) return 'Au revoir';
-      return 'Traduction: $text';
-    }
-    else if (_sourceLanguage == 'en' && _targetLanguage == 'rw') {
-      if (lowerText.contains('hello')) return 'Muraho';
-      return 'Translation: $text';
-    }
-    else {
-      return 'Translation: $text';
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _targetController.clear();
+        _lastTranslatedInput = '';
+        _isSpeaking = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text("Translation failed: $e"),
+          backgroundColor: Colors.red,
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isTranslating = false);
+      }
     }
   }
 
@@ -118,16 +182,103 @@ class _TextTranslationScreenState extends State<TextTranslationScreen> {
       final temp = _sourceLanguage;
       _sourceLanguage = _targetLanguage;
       _targetLanguage = temp;
-      
+
       final tempText = _sourceController.text;
       _sourceController.text = _targetController.text;
       _targetController.text = tempText;
+      _lastTranslatedInput = '';
+      _isSpeaking = false;
+      _flutterTts.stop();
     });
   }
 
   void _clearFields() {
-    _sourceController.clear();
-    _targetController.clear();
+    setState(() {
+      _sourceController.clear();
+      _targetController.clear();
+      _lastTranslatedInput = '';
+      _isSpeaking = false;
+    });
+    _flutterTts.stop();
+  }
+
+  String _languageLocale(String code) {
+    switch (code) {
+      case 'fr':
+        return 'fr-FR';
+      case 'rw':
+        return 'rw-RW';
+      default:
+        return 'en-US';
+    }
+  }
+
+  Future<void> _speakTranslation() async {
+    if (_targetController.text.isEmpty) return;
+    setState(() => _isSpeaking = true);
+    await _flutterTts.setLanguage(_languageLocale(_targetLanguage));
+    await _flutterTts.speak(_targetController.text);
+  }
+
+  Future<void> _copyTranslation() async {
+    if (_targetController.text.isEmpty) return;
+    await Clipboard.setData(ClipboardData(text: _targetController.text));
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Copied to clipboard!'),
+        backgroundColor: Colors.green,
+      ),
+    );
+  }
+
+  Future<void> _toggleFavorite() async {
+    if (_targetController.text.isEmpty) return;
+
+    final favoriteKey = jsonEncode({
+      'source': _sourceController.text.trim(),
+      'translated': _targetController.text.trim(),
+      'source_language': _sourceLanguage,
+      'target_language': _targetLanguage,
+    });
+
+    final prefs = await SharedPreferences.getInstance();
+    final isAlreadyFavorite = _favoriteTranslations.contains(favoriteKey);
+
+    setState(() {
+      if (isAlreadyFavorite) {
+        _favoriteTranslations.remove(favoriteKey);
+      } else {
+        _favoriteTranslations.add(favoriteKey);
+      }
+    });
+
+    await prefs.setStringList(_favoritesKey, _favoriteTranslations.toList());
+
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          isAlreadyFavorite
+              ? 'Removed from favorites!'
+              : 'Saved to favorites!',
+        ),
+        backgroundColor: Colors.pink,
+      ),
+    );
+  }
+
+  bool _isFavoriteCurrentTranslation() {
+    if (_targetController.text.isEmpty) return false;
+
+    final favoriteKey = jsonEncode({
+      'source': _sourceController.text.trim(),
+      'translated': _targetController.text.trim(),
+      'source_language': _sourceLanguage,
+      'target_language': _targetLanguage,
+    });
+
+    return _favoriteTranslations.contains(favoriteKey);
   }
 
   @override
@@ -136,6 +287,16 @@ class _TextTranslationScreenState extends State<TextTranslationScreen> {
       appBar: AppBar(
         title: const Text('Text Translation'),
         elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          tooltip: 'Back to menu',
+          onPressed: () {
+            Navigator.of(context).pushAndRemoveUntil(
+              MaterialPageRoute(builder: (_) => const HomeScreen()),
+              (route) => false,
+            );
+          },
+        ),
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
@@ -174,7 +335,13 @@ class _TextTranslationScreenState extends State<TextTranslationScreen> {
                           );
                         }).toList(),
                         onChanged: (value) {
-                          setState(() => _sourceLanguage = value!);
+                          setState(() {
+                            _sourceLanguage = value!;
+                            _targetController.clear();
+                            _lastTranslatedInput = '';
+                            _isSpeaking = false;
+                          });
+                          _flutterTts.stop();
                         },
                       ),
                     ),
@@ -204,7 +371,13 @@ class _TextTranslationScreenState extends State<TextTranslationScreen> {
                           );
                         }).toList(),
                         onChanged: (value) {
-                          setState(() => _targetLanguage = value!);
+                          setState(() {
+                            _targetLanguage = value!;
+                            _targetController.clear();
+                            _lastTranslatedInput = '';
+                            _isSpeaking = false;
+                          });
+                          _flutterTts.stop();
                         },
                       ),
                     ),
@@ -381,23 +554,32 @@ class _TextTranslationScreenState extends State<TextTranslationScreen> {
                           children: [
                             IconButton(
                               icon: const Icon(Icons.copy),
-                              onPressed: () {
-                                // Copy to clipboard
-                              },
+                              onPressed: _copyTranslation,
                               color: Colors.blue.shade700,
                             ),
                             IconButton(
-                              icon: const Icon(Icons.volume_up),
-                              onPressed: () {
-                                // Text to speech
-                              },
+                              icon: Icon(
+                                _isSpeaking ? Icons.stop : Icons.volume_up,
+                              ),
+                              onPressed: _targetController.text.isEmpty
+                                  ? null
+                                  : () {
+                                      if (_isSpeaking) {
+                                        _flutterTts.stop();
+                                        setState(() => _isSpeaking = false);
+                                      } else {
+                                        _speakTranslation();
+                                      }
+                                    },
                               color: Colors.blue.shade700,
                             ),
                             IconButton(
-                              icon: const Icon(Icons.favorite_border),
-                              onPressed: () {
-                                // Save to favorites
-                              },
+                              icon: Icon(
+                                _isFavoriteCurrentTranslation()
+                                    ? Icons.favorite
+                                    : Icons.favorite_border,
+                              ),
+                              onPressed: _toggleFavorite,
                               color: Colors.blue.shade700,
                             ),
                           ],
