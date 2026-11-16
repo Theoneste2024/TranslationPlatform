@@ -1,34 +1,13 @@
 # Translation Platform
 
-A Flutter mobile application for multilingual translation.
+The repository is split into two projects:
 
-## Features
+- [frontend/](./frontend/) — Flutter application.
+- [backend/](./backend/) — Django API and MySQL configuration.
 
-- Text Translation
-- Speech Translation
-- Driver Mode
-- Camera Translation
-- Offline Translation (Pack)
-- Education Tools
-- Google Maps
+See the [backend setup guide](./backend/README.md) for environment variables,
+database setup, and API routes. Create Django migrations when the schema is
+ready; none are checked in yet.
 
-## Technologies Used
-
-- Flutter
-- Dart
-- REST API
-
-## Developer
-Theoneste Isezerano  
-Data Scientist
-0785446324
-isezeranotheoneste@gmail.com
-primedataconsultinggroup.rw@gmail.com
-
-## Installation
-
-git clone https://github.com/Theoneste2024/TranslationPlatform.git
-
-flutter pub get
-
-flutter run
+The Flutter API base URL can be overridden with
+`--dart-define=API_BASE_URL=https://your-api-host/api/v1`.
