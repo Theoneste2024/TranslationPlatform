@@ -1,300 +1,540 @@
-import binascii
 import logging
+import secrets
+import smtplib
+from datetime import timedelta
+from typing import Any, ClassVar
 
-from django.contrib.auth import authenticate
-from django.contrib.auth.tokens import default_token_generator
-from django.core import signing
-from django.shortcuts import render
-from django.urls import reverse
-from django.utils.encoding import force_bytes, force_str
-from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
-from rest_framework import status
-from rest_framework.exceptions import AuthenticationFailed
-from rest_framework.permissions import AllowAny, IsAuthenticated
+from django.conf import settings
+from django.contrib.auth.hashers import check_password, make_password
+from django.contrib.auth.password_validation import validate_password
+from django.core.exceptions import ValidationError
+from django.core.mail import send_mail
+from django.core.validators import validate_email
+from django.db import IntegrityError, transaction
+from django.db.models import Q
+from django.utils import timezone
+from rest_framework import generics, status
+from rest_framework.authentication import BaseAuthentication
+from rest_framework.permissions import BasePermission
+from rest_framework.request import Request
 from rest_framework.response import Response
-from rest_framework.throttling import ScopedRateThrottle
-from rest_framework.views import APIView
-from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
-from rest_framework_simplejwt.serializers import TokenRefreshSerializer
-from rest_framework_simplejwt.settings import api_settings
-from rest_framework_simplejwt.tokens import RefreshToken
-from rest_framework_simplejwt.views import TokenRefreshView
 
-from .models import User
-from .notifications import DeliveryError, send_auth_email
-from .serializers import (
-    LoginSerializer,
-    PasswordResetConfirmSerializer,
-    PasswordResetRequestSerializer,
-    RegistrationSerializer,
-    ResendVerificationSerializer,
-    UserSerializer,
+from .models import EmailOTP, Role, User
+from .permissions import (
+    BearerTokenAuthentication,
+    CanAddUser,
+    CanLogin,
+    CanRequestPasswordReset,
+    CanResendVerification,
+    CanResetPassword,
+    CanVerifyEmail,
+    CanViewUserProfile,
+    issue_access_token,
 )
 
-
 logger = logging.getLogger(__name__)
-EMAIL_VERIFICATION_SALT = "users.email-verification"
-EMAIL_VERIFICATION_MAX_AGE = 24 * 60 * 60
 
 
-def _send_verification_email(request, user):
-    token = signing.dumps(
-        {"user_id": user.pk, "email": user.email},
-        salt=EMAIL_VERIFICATION_SALT,
-        compress=True,
-    )
-    link = request.build_absolute_uri(
-        reverse("email_verify", kwargs={"token": token})
-    )
-    send_auth_email(
-        user.email,
-        "Verify your email address",
-        f"Verify your email address using this link:\n\n{link}",
-    )
+class EmailDeliveryError(Exception):
+    pass
 
 
-def _issue_tokens(user):
-    refresh = RefreshToken.for_user(user)
-    refresh["auth_version"] = user.auth_version
+class OTPRateLimited(Exception):
+    pass
+
+
+def _otp_timing_payload(message: str) -> dict[str, int | str]:
     return {
-        "refresh": str(refresh),
-        "access": str(refresh.access_token),
+        'message': message,
+        'expires_in': settings.OTP_EXPIRY_SECONDS,
+        'resend_in': settings.OTP_RESEND_COOLDOWN_SECONDS,
     }
 
 
-def _password_reset_user(uidb64, token):
-    try:
-        user_id = force_str(urlsafe_base64_decode(uidb64))
-        user = User.objects.get(pk=user_id)
-    except (
-        User.DoesNotExist,
-        binascii.Error,
-        OverflowError,
-        TypeError,
-        ValueError,
-        UnicodeDecodeError,
-    ):
-        return None
-
+def _send_otp(user: User, purpose: str) -> None:
+    now = timezone.now()
+    most_recent = (
+        EmailOTP.objects.filter(user=user, purpose=purpose)
+        .order_by('-created_at')
+        .first()
+    )
     if (
-        not user.is_active
-        or not user.email_verified
-        or not default_token_generator.check_token(user, token)
+        most_recent is not None
+        and now - most_recent.created_at
+        < timedelta(seconds=settings.OTP_RESEND_COOLDOWN_SECONDS)
     ):
-        return None
-    return user
+        raise OTPRateLimited
+
+    EmailOTP.objects.filter(
+        user=user,
+        purpose=purpose,
+        consumed_at__isnull=True,
+    ).update(consumed_at=now)
+
+    code = f'{secrets.randbelow(1_000_000):06d}'
+    EmailOTP.objects.create(
+        user=user,
+        purpose=purpose,
+        code_hash=make_password(code),
+        expires_at=now + timedelta(seconds=settings.OTP_EXPIRY_SECONDS),
+    )
+    subject = (
+        'Verify your email address'
+        if purpose == EmailOTP.Purpose.EMAIL_VERIFICATION
+        else 'Reset your password'
+    )
+    message = (
+        f'Your verification code is {code}. '
+        f'It expires in {settings.OTP_EXPIRY_SECONDS // 60} minutes.'
+    )
+    try:
+        sent = send_mail(
+            subject,
+            message,
+            settings.DEFAULT_FROM_EMAIL,
+            [user.email],
+            fail_silently=False,
+        )
+    except (OSError, smtplib.SMTPException) as error:
+        logger.exception('Could not send an OTP email.')
+        raise EmailDeliveryError from error
+    if sent != 1:
+        logger.error('The configured email backend did not send an OTP email.')
+        raise EmailDeliveryError
 
 
-class RegisterView(APIView):
-    permission_classes = [AllowAny]
-    throttle_classes = [ScopedRateThrottle]
-    throttle_scope = "registration"
+def _consume_otp(user: User, purpose: str, code: str) -> bool:
+    otp = (
+        EmailOTP.objects.select_for_update()
+        .filter(
+            user=user,
+            purpose=purpose,
+            consumed_at__isnull=True,
+        )
+        .order_by('-created_at')
+        .first()
+    )
+    if otp is None:
+        return False
 
-    def post(self, request):
-        serializer = RegistrationSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        user = serializer.save()
-        try:
-            _send_verification_email(request, user)
-        except DeliveryError:
-            logger.exception("Could not send verification email for user_id=%s", user.pk)
+    now = timezone.now()
+    if otp.expires_at <= now or otp.attempts >= settings.OTP_MAX_ATTEMPTS:
+        otp.consumed_at = now
+        otp.save(update_fields=['consumed_at'])
+        return False
+
+    otp.attempts += 1
+    if not check_password(code, otp.code_hash):
+        if otp.attempts >= settings.OTP_MAX_ATTEMPTS:
+            otp.consumed_at = now
+        otp.save(update_fields=['attempts', 'consumed_at'])
+        return False
+
+    otp.consumed_at = now
+    otp.save(update_fields=['attempts', 'consumed_at'])
+    return True
+
+
+def _password_errors(password: str, user: User | None = None) -> list[str]:
+    errors = []
+    if len(password) < 8:
+        errors.append('Password must be at least 8 characters long.')
+    if not any(character.isupper() for character in password):
+        errors.append('Password must include an uppercase letter.')
+    if not any(character.islower() for character in password):
+        errors.append('Password must include a lowercase letter.')
+    if not any(character.isdigit() for character in password):
+        errors.append('Password must include a number.')
+    if not any(not character.isalnum() for character in password):
+        errors.append('Password must include a symbol.')
+    if errors:
+        return errors
+
+    try:
+        validate_password(password, user)
+    except ValidationError as error:
+        return list(error.messages)
+    return []
+
+
+class UsersAPIView(generics.GenericAPIView):
+    authentication_classes: ClassVar[list[type[BaseAuthentication]]] = [
+        BearerTokenAuthentication
+    ]
+    permission_classes: ClassVar[list[type[BasePermission]]] = []
+
+    def get_payload(self, request: Request) -> dict[str, Any] | Response:
+        payload = request.data
+        if not isinstance(payload, dict):
             return Response(
-                {"detail": "The verification email could not be sent. Please retry."},
+                {'error': 'Request body must be a JSON object.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        return payload
+
+    def check_permissions(self, request: Request) -> None:
+        if request.method == 'OPTIONS':
+            return
+        super().check_permissions(request)
+
+    def options(self, request: Request, *args, **kwargs) -> Response:
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+    def finalize_response(self, request, response, *args, **kwargs):
+        response = super().finalize_response(request, response, *args, **kwargs)
+        response['Access-Control-Allow-Origin'] = '*'
+        response['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS'
+        response['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
+        return response
+
+
+class SignupView(UsersAPIView):
+    permission_classes: ClassVar[list[type[BasePermission]]] = [CanAddUser]
+
+    def post(self, request: Request) -> Response:
+        data = self.get_payload(request)
+        if isinstance(data, Response):
+            return data
+        if 'role' in data:
+            return Response(
+                {'error': 'Role cannot be selected during signup.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        email = str(data.get('email', '')).strip().lower()
+        username = str(data.get('username', '')).strip().lower()
+        phone_number = str(data.get('phone_number', '')).strip()
+        country = str(data.get('country', '')).strip()
+        gender = data.get('gender')
+        password = data.get('password')
+        confirm_password = data.get('confirm_password')
+
+        try:
+            validate_email(email)
+        except ValidationError:
+            return Response(
+                {'error': 'A valid email address is required.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if not username or len(username) > 150:
+            return Response(
+                {'error': 'A username is required.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            User._meta.get_field('username').run_validators(username)
+        except ValidationError:
+            return Response(
+                {'error': 'A valid username is required.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if not phone_number or len(phone_number) > 32:
+            return Response(
+                {'error': 'A valid phone number is required.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if not country or len(country) > 100:
+            return Response(
+                {'error': 'A valid country is required.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if gender not in User.Gender.values:
+            return Response(
+                {'error': 'A valid gender is required.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if not isinstance(password, str):
+            return Response(
+                {'error': 'A password is required.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if not isinstance(confirm_password, str):
+            return Response(
+                {'error': 'Password confirmation is required.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if password != confirm_password:
+            return Response(
+                {'error': 'Password and confirmation do not match.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        password_errors = _password_errors(password)
+        if password_errors:
+            return Response(
+                {'errors': password_errors},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if User.objects.filter(email=email).exists():
+            return Response(
+                {'error': 'An account with this email already exists.'},
+                status=status.HTTP_409_CONFLICT,
+            )
+        if User.objects.filter(username__iexact=username).exists():
+            return Response(
+                {'error': 'An account with this username already exists.'},
+                status=status.HTTP_409_CONFLICT,
+            )
+        if User.objects.filter(phone_number=phone_number).exists():
+            return Response(
+                {'error': 'An account with this phone number already exists.'},
+                status=status.HTTP_409_CONFLICT,
+            )
+
+        try:
+            with transaction.atomic():
+                user_role = Role.objects.get(name='user')
+                user = User.objects.create_user(
+                    username=username,
+                    email=email,
+                    phone_number=phone_number,
+                    country=country,
+                    gender=gender,
+                    password=password,
+                    role=user_role,
+                    is_active=False,
+                )
+                _send_otp(user, EmailOTP.Purpose.EMAIL_VERIFICATION)
+        except IntegrityError:
+            return Response(
+                {'error': 'An account with these details already exists.'},
+                status=status.HTTP_409_CONFLICT,
+            )
+        except EmailDeliveryError:
+            return Response(
+                {'error': 'Verification email could not be sent. Please try again later.'},
                 status=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
 
         return Response(
-            {
-                "detail": "Registration successful. Verify your email before signing in.",
-                "user": UserSerializer(user).data,
-            },
+            _otp_timing_payload('Verification code sent to your email address.'),
             status=status.HTTP_201_CREATED,
         )
 
 
-class VerifyEmailView(APIView):
-    permission_classes = [AllowAny]
-    throttle_classes = [ScopedRateThrottle]
-    throttle_scope = "email_verification"
+class VerifyEmailView(UsersAPIView):
+    permission_classes: ClassVar[list[type[BasePermission]]] = [CanVerifyEmail]
 
-    def get(self, request, token):
-        try:
-            payload = signing.loads(
-                token,
-                salt=EMAIL_VERIFICATION_SALT,
-                max_age=EMAIL_VERIFICATION_MAX_AGE,
-            )
-            user = User.objects.get(
-                pk=payload["user_id"],
-                email=payload["email"],
-            )
-        except (
-            signing.BadSignature,
-            KeyError,
-            TypeError,
-            ValueError,
-            User.DoesNotExist,
-        ):
+    def post(self, request: Request) -> Response:
+        data = self.get_payload(request)
+        if isinstance(data, Response):
+            return data
+        email = str(data.get('email', '')).strip().lower()
+        code = data.get('otp')
+        if not email or not isinstance(code, str) or not code.isdigit() or len(code) != 6:
             return Response(
-                {"detail": "The verification link is invalid or expired."},
+                {'error': 'Email and a six-digit OTP are required.'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        if not user.email_verified:
-            user.email_verified = True
+        user = User.objects.filter(email=email).first()
+        if user is None:
+            return Response(
+                {'error': 'Invalid email or OTP.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if user.is_active:
+            return Response({'message': 'Email address is already verified.'})
+
+        with transaction.atomic():
+            if not _consume_otp(user, EmailOTP.Purpose.EMAIL_VERIFICATION, code):
+                return Response(
+                    {'error': 'Invalid or expired OTP.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
             user.is_active = True
-            user.save(update_fields=("email_verified", "is_active"))
-        return Response({"detail": "Email verified. You can now sign in."})
+            user.save(update_fields=['is_active'])
+        return Response({'message': 'Email address verified.'})
 
 
-class ResendVerificationView(APIView):
-    permission_classes = [AllowAny]
-    throttle_classes = [ScopedRateThrottle]
-    throttle_scope = "email_verification"
+class ResendVerificationView(UsersAPIView):
+    permission_classes: ClassVar[list[type[BasePermission]]] = [CanResendVerification]
 
-    def post(self, request):
-        serializer = ResendVerificationSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        user = User.objects.filter(
-            email__iexact=serializer.validated_data["email"],
-            email_verified=False,
-            is_active=False,
-        ).first()
-        if user:
-            try:
-                _send_verification_email(request, user)
-            except DeliveryError:
-                logger.exception(
-                    "Could not resend verification email for user_id=%s",
-                    user.pk,
-                )
-                return Response(
-                    {"detail": "The verification email could not be sent. Please retry."},
-                    status=status.HTTP_503_SERVICE_UNAVAILABLE,
-                )
-
-        return Response(
-            {"detail": "If the account needs verification, an email has been sent."}
-        )
-
-
-class LoginView(APIView):
-    permission_classes = [AllowAny]
-    throttle_classes = [ScopedRateThrottle]
-    throttle_scope = "login"
-
-    def post(self, request):
-        serializer = LoginSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        user = authenticate(
-            request=request,
-            username=serializer.validated_data["identifier"],
-            password=serializer.validated_data["password"],
-        )
-        if user is None:
-            raise AuthenticationFailed("Invalid email or phone number, or password.")
-
-        return Response({"user": UserSerializer(user).data, **_issue_tokens(user)})
-
-
-class VersionedTokenRefreshSerializer(TokenRefreshSerializer):
-    def validate(self, attrs):
+    def post(self, request: Request) -> Response:
+        data = self.get_payload(request)
+        if isinstance(data, Response):
+            return data
+        email = str(data.get('email', '')).strip().lower()
         try:
-            refresh = RefreshToken(attrs["refresh"])
-        except TokenError as exc:
-            raise InvalidToken("Token is invalid.") from exc
-
-        user_id = refresh.get(api_settings.USER_ID_CLAIM)
-        user = User.objects.filter(
-            pk=user_id,
-            is_active=True,
-            email_verified=True,
-        ).first()
-        if user is None or refresh.get("auth_version") != user.auth_version:
-            raise InvalidToken("A current login token is required.")
-        return super().validate(attrs)
-
-
-class VersionedTokenRefreshView(TokenRefreshView):
-    serializer_class = VersionedTokenRefreshSerializer
-    permission_classes = [AllowAny]
-
-
-class PasswordResetRequestView(APIView):
-    permission_classes = [AllowAny]
-    throttle_classes = [ScopedRateThrottle]
-    throttle_scope = "password_reset"
-
-    def post(self, request):
-        serializer = PasswordResetRequestSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        user = User.objects.filter(
-            email__iexact=serializer.validated_data["email"],
-            is_active=True,
-            email_verified=True,
-        ).first()
-        if user:
-            uidb64 = urlsafe_base64_encode(force_bytes(user.pk))
-            token = default_token_generator.make_token(user)
-            link = request.build_absolute_uri(
-                reverse(
-                    "password_reset_confirm",
-                    kwargs={"uidb64": uidb64, "token": token},
-                )
-            )
-            try:
-                send_auth_email(
-                    user.email,
-                    "Reset your password",
-                    f"Reset your password using this link:\n\n{link}",
-                )
-            except DeliveryError:
-                logger.exception("Could not send password reset email for user_id=%s", user.pk)
-                return Response(
-                    {"detail": "The password reset email could not be sent. Please retry."},
-                    status=status.HTTP_503_SERVICE_UNAVAILABLE,
-                )
-
-        return Response(
-            {"detail": "If the account exists, a password reset email has been sent."}
-        )
-
-
-class PasswordResetConfirmView(APIView):
-    permission_classes = [AllowAny]
-    throttle_classes = [ScopedRateThrottle]
-    throttle_scope = "password_reset"
-
-    def get(self, request, uidb64, token):
-        is_valid = _password_reset_user(uidb64, token) is not None
-        return render(
-            request,
-            "users/password_reset_confirm.html",
-            {"is_valid": is_valid},
-            status=status.HTTP_200_OK if is_valid else status.HTTP_400_BAD_REQUEST,
-        )
-
-    def post(self, request, uidb64, token):
-        user = _password_reset_user(uidb64, token)
-        if user is None:
+            validate_email(email)
+        except ValidationError:
             return Response(
-                {"detail": "The password reset link is invalid or expired."},
+                {'error': 'A valid email address is required.'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        serializer = PasswordResetConfirmSerializer(
-            data=request.data,
-            context={"user": user},
+        user = User.objects.filter(email=email, is_active=False).first()
+        if user is not None:
+            try:
+                with transaction.atomic():
+                    _send_otp(user, EmailOTP.Purpose.EMAIL_VERIFICATION)
+            except OTPRateLimited:
+                pass
+            except EmailDeliveryError:
+                return Response(
+                    {'error': 'Verification email could not be sent. Please try again later.'},
+                    status=status.HTTP_503_SERVICE_UNAVAILABLE,
+                )
+        return Response(
+            _otp_timing_payload(
+                'If the account needs verification, a code has been sent.'
+            ),
+            status=status.HTTP_202_ACCEPTED,
         )
-        serializer.is_valid(raise_exception=True)
-        user.set_password(serializer.validated_data["password"])
-        user.auth_version += 1
-        user.save(update_fields=("password", "auth_version"))
-        return Response({"detail": "Password reset successful. You can now sign in."})
 
 
-class CurrentUserView(APIView):
-    permission_classes = [IsAuthenticated]
+class LoginView(UsersAPIView):
+    permission_classes: ClassVar[list[type[BasePermission]]] = [CanLogin]
 
-    def get(self, request):
-        return Response(UserSerializer(request.user).data)
+    def post(self, request: Request) -> Response:
+        data = self.get_payload(request)
+        if isinstance(data, Response):
+            return data
+        identifier = str(
+            data.get('identifier', data.get('email', ''))
+        ).strip().lower()
+        password = data.get('password')
+        if not identifier or not isinstance(password, str):
+            return Response(
+                {'error': 'Email or username and password are required.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        user = User.objects.filter(
+            Q(email__iexact=identifier) | Q(username__iexact=identifier)
+        ).first()
+        if user is None or not user.check_password(password):
+            return Response(
+                {'error': 'Invalid email or password.'},
+                status=status.HTTP_401_UNAUTHORIZED,
+            )
+        if not user.is_active:
+            return Response(
+                {'error': 'Verify your email before logging in.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        return Response(
+            {
+                'access_token': issue_access_token(user),
+                'token_type': 'Bearer',
+                'expires_in': settings.API_TOKEN_TTL_SECONDS,
+                'user': {
+                    'username': user.username,
+                    'email': user.email,
+                    'phone_number': user.phone_number,
+                    'country': user.country,
+                    'gender': user.gender,
+                    'role': user.role.name,
+                },
+            }
+        )
+
+
+class ForgotPasswordView(UsersAPIView):
+    permission_classes: ClassVar[list[type[BasePermission]]] = [CanRequestPasswordReset]
+
+    def post(self, request: Request) -> Response:
+        data = self.get_payload(request)
+        if isinstance(data, Response):
+            return data
+        email = str(data.get('email', '')).strip().lower()
+        try:
+            validate_email(email)
+        except ValidationError:
+            return Response(
+                {'error': 'A valid email address is required.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        user = User.objects.filter(email=email, is_active=True).first()
+        if user is not None:
+            try:
+                with transaction.atomic():
+                    _send_otp(user, EmailOTP.Purpose.PASSWORD_RESET)
+            except OTPRateLimited:
+                pass
+            except EmailDeliveryError:
+                return Response(
+                    {'error': 'Password reset email could not be sent. Please try again later.'},
+                    status=status.HTTP_503_SERVICE_UNAVAILABLE,
+                )
+        return Response(
+            _otp_timing_payload(
+                'If the account exists, a password reset code has been sent.'
+            ),
+            status=status.HTTP_202_ACCEPTED,
+        )
+
+
+class ResetPasswordView(UsersAPIView):
+    permission_classes: ClassVar[list[type[BasePermission]]] = [CanResetPassword]
+
+    def post(self, request: Request) -> Response:
+        data = self.get_payload(request)
+        if isinstance(data, Response):
+            return data
+        email = str(data.get('email', '')).strip().lower()
+        code = data.get('otp')
+        password = data.get('new_password')
+        confirm_password = data.get('confirm_password')
+        if not isinstance(code, str) or not code.isdigit() or len(code) != 6:
+            return Response(
+                {'error': 'A six-digit OTP is required.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if not isinstance(password, str):
+            return Response(
+                {'error': 'A new password is required.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if not isinstance(confirm_password, str):
+            return Response(
+                {'error': 'Password confirmation is required.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if password != confirm_password:
+            return Response(
+                {'error': 'Password and confirmation do not match.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        user = User.objects.filter(email=email, is_active=True).first()
+        if user is None:
+            return Response(
+                {'error': 'Invalid email or OTP.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        password_errors = _password_errors(password, user)
+        if password_errors:
+            return Response(
+                {'errors': password_errors},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        with transaction.atomic():
+            if not _consume_otp(user, EmailOTP.Purpose.PASSWORD_RESET, code):
+                return Response(
+                    {'error': 'Invalid or expired OTP.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            user.set_password(password)
+            user.token_version += 1
+            user.save(update_fields=['password', 'token_version'])
+        return Response({'message': 'Password has been reset.'})
+
+
+class ProfileView(UsersAPIView):
+    permission_classes: ClassVar[list[type[BasePermission]]] = [CanViewUserProfile]
+
+    def get(self, request: Request) -> Response:
+        user = request.user
+        return Response(
+            {
+                'username': user.username,
+                'email': user.email,
+                'phone_number': user.phone_number,
+                'country': user.country,
+                'gender': user.gender,
+                'role': user.role.name,
+            }
+        )

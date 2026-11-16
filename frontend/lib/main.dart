@@ -5,8 +5,8 @@ import 'core/constants/system_ui.dart';
 import 'core/network/api_client.dart';
 import 'providers/auth_provider.dart';
 import 'providers/offline_provider.dart';
-import 'repositories/auth_repository.dart';
 import 'screens/education/lecture_summarizer_screen.dart';
+import 'screens/auth/auth_screen.dart';
 import 'screens/home/home_screen.dart';
 import 'screens/maps/google_maps_screen.dart';
 import 'screens/settings/settings_screen.dart';
@@ -31,11 +31,11 @@ void main() {
         ),
         ChangeNotifierProvider(create: (_) => AppSidebarController()),
         ChangeNotifierProvider(
-          create: (context) => AuthProvider(
-            AuthRepository(context.read<ApiClient>()),
-          ),
+          create: (_) => AuthProvider()..restoreSession(),
         ),
         ChangeNotifierProvider(create: (_) => OfflineProvider()),
+
+// You don't need to import OfflinePacksScreen here – it's used in the drawer.
       ],
       child: const MyApp(),
     ),
@@ -74,7 +74,52 @@ class MyApp extends StatelessWidget {
         AppRoutes.maps: (_) => const GoogleMapsScreen(),
         AppRoutes.settings: (_) => const SettingsScreen(),
       },
-      home: const HomeScreen(),
+      home: const _AppHome(),
+    );
+  }
+}
+
+class _AppHome extends StatelessWidget {
+  const _AppHome();
+
+  @override
+  Widget build(BuildContext context) {
+    return Consumer<AuthProvider>(
+      builder: (context, auth, _) {
+        if (auth.isInitializing) {
+          return const Scaffold(
+            body: Center(child: CircularProgressIndicator()),
+          );
+        }
+        if (auth.initializationError != null) {
+          return Scaffold(
+            body: Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      auth.initializationError!,
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 16),
+                    ElevatedButton(
+                      onPressed: auth.restoreSession,
+                      child: const Text('Retry'),
+                    ),
+                    TextButton(
+                      onPressed: auth.continueToLogin,
+                      child: const Text('Continue to Login'),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        }
+        return auth.isAuthenticated ? const HomeScreen() : const AuthScreen();
+      },
     );
   }
 }

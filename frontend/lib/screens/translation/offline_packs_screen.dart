@@ -433,7 +433,6 @@ class _OfflinePacksScreenState extends State<OfflinePacksScreen> {
     // } else {
     // Start free download
     offlineProvider.downloadPack(pack.id);
-
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text('Downloading ${pack.name}...'),

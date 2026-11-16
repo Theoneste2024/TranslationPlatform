@@ -1,3 +1,5 @@
+from typing import ClassVar
+
 from django.db import models
 
 
@@ -36,7 +38,7 @@ class Translation(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        ordering = ['-created_at']
+        ordering: ClassVar[list[str]] = ['-created_at']
 
     def __str__(self) -> str:
         return f'{self.get_kind_display()} translation #{self.pk} ({self.status})'

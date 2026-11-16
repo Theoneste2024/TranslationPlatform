@@ -251,6 +251,11 @@ class _HomeScreenState extends State<HomeScreen> {
               title: 'About',
               onTap: () => _showAboutDialog(context),
             ),
+            _buildDrawerItem(
+              icon: Icons.logout,
+              title: 'Log out',
+              onTap: () => _logout(context, closeDrawer: true),
+            ),
           ],
         ),
       ),
@@ -345,6 +350,19 @@ class _HomeScreenState extends State<HomeScreen> {
       context,
       MaterialPageRoute(builder: (context) => screen),
     );
+  }
+
+  Future<void> _logout(BuildContext context, {bool closeDrawer = false}) async {
+    if (closeDrawer) Navigator.pop(context);
+    try {
+      await context.read<AuthProvider>().logout();
+    } on AuthException catch (error) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(error.message)),
+        );
+      }
+    }
   }
 
   void _showAboutDialog(BuildContext context) {

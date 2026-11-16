@@ -1,174 +1,334 @@
-import os
-from unittest.mock import patch
-from urllib.parse import urlsplit
+import json
+import re
 
-from django.contrib.auth import get_user_model
-from django.test import TestCase
-from rest_framework.test import APIClient
+from django.core import mail
+from django.http import JsonResponse
+from django.test import RequestFactory, TestCase, override_settings
 
-from .notifications import send_auth_email
-from .views import _issue_tokens
+from .models import EmailOTP, Permission, Role, User
+from .permissions import (
+    CapabilityPermission,
+    issue_access_token,
+    require_permission,
+)
 
 
-User = get_user_model()
-
-
-class UserAuthenticationApiTests(TestCase):
-    def setUp(self):
-        self.client = APIClient()
-
-    def create_user(self, **overrides):
-        values = {
-            "email": "person@example.com",
-            "username": "person",
-            "phone_number": "+12025550143",
-            "gender": User.Gender.OTHER,
-            "password": "Long-Unique-Passphrase-2030!",
-            "email_verified": True,
-            "is_active": True,
-        }
-        values.update(overrides)
-        password = values.pop("password")
-        return User.objects.create_user(password=password, **values)
-
-    @patch("users.views.send_auth_email")
-    def test_registration_requires_email_verification(self, send_email):
-        response = self.client.post(
-            "/api/v1/auth/register/",
-            {
-                "email": "new.user@example.com",
-                "username": "newuser",
-                "phone_number": "+12025550144",
-                "gender": "prefer_not_to_say",
-                "password": "Long-Unique-Passphrase-2030!",
-                "confirm_password": "Long-Unique-Passphrase-2030!",
-            },
-            format="json",
+@override_settings(
+    EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend',
+    OTP_EXPIRY_SECONDS=600,
+)
+class UserAuthenticationTests(TestCase):
+    def post_json(self, path, body):
+        return self.client.post(
+            path,
+            data=json.dumps(body),
+            content_type='application/json',
         )
 
-        self.assertEqual(response.status_code, 201)
-        self.assertNotIn("access", response.data)
-        self.assertEqual(response.data["user"]["username"], "newuser")
-        user = User.objects.get(email="new.user@example.com")
+    def verification_code(self):
+        match = re.search(r'\b\d{6}\b', mail.outbox[-1].body)
+        self.assertIsNotNone(match)
+        return match.group()
+
+    def test_signup_requires_email_verification_before_login(self):
+        weak_password = self.post_json(
+            '/api/users/signup',
+            {
+                'username': 'weak_password_user',
+                'email': 'weak-password@example.com',
+                'phone_number': '+15551234565',
+                'country': 'United States',
+                'gender': 'prefer_not_to_say',
+                'password': 'password1',
+                'confirm_password': 'password1',
+            },
+        )
+        self.assertEqual(weak_password.status_code, 400)
+
+        mismatched_password = self.post_json(
+            '/api/users/signup',
+            {
+                'username': 'mismatch_user',
+                'email': 'mismatch@example.com',
+                'phone_number': '+15551234564',
+                'country': 'United States',
+                'gender': 'prefer_not_to_say',
+                'password': 'Strong-Passphrase-90',
+                'confirm_password': 'Different-Passphrase-90',
+            },
+        )
+        self.assertEqual(mismatched_password.status_code, 400)
+
+        missing_confirmation = self.post_json(
+            '/api/users/signup',
+            {
+                'username': 'missing_confirmation_user',
+                'email': 'missing-confirmation@example.com',
+                'phone_number': '+15551234563',
+                'country': 'United States',
+                'gender': 'prefer_not_to_say',
+                'password': 'Strong-Passphrase-90',
+            },
+        )
+        self.assertEqual(missing_confirmation.status_code, 400)
+
+        missing_country = self.post_json(
+            '/api/users/signup',
+            {
+                'username': 'missing_country_user',
+                'email': 'missing-country@example.com',
+                'phone_number': '+15551234566',
+                'gender': 'prefer_not_to_say',
+                'password': 'Strong-Passphrase-90',
+            },
+        )
+        self.assertEqual(missing_country.status_code, 400)
+
+        signup = self.post_json(
+            '/api/users/signup',
+            {
+                'username': 'new_user',
+                'email': 'new@example.com',
+                'phone_number': '+15551234567',
+                'country': 'United States',
+                'gender': 'prefer_not_to_say',
+                'password': 'Strong-Passphrase-90',
+                'confirm_password': 'Strong-Passphrase-90',
+                'role': 'admin',
+            },
+        )
+        self.assertEqual(signup.status_code, 400)
+
+        signup = self.post_json(
+            '/api/users/signup',
+            {
+                'username': 'new_user',
+                'email': 'new@example.com',
+                'phone_number': '+15551234567',
+                'country': 'United States',
+                'gender': 'prefer_not_to_say',
+                'password': 'Strong-Passphrase-90',
+                'confirm_password': 'Strong-Passphrase-90',
+            },
+        )
+        self.assertEqual(signup.status_code, 201)
+        user = User.objects.get(email='new@example.com')
         self.assertFalse(user.is_active)
-        self.assertFalse(user.email_verified)
-        self.assertTrue(user.check_password("Long-Unique-Passphrase-2030!"))
-        send_email.assert_called_once()
+        self.assertEqual(user.role.name, 'user')
+        self.assertEqual(user.country, 'United States')
+        self.assertEqual(user.username, 'new_user')
 
-        verification_path = urlsplit(send_email.call_args.args[2].split("\n\n")[-1]).path
-        verification_response = self.client.get(verification_path)
-        user.refresh_from_db()
-        self.assertEqual(verification_response.status_code, 200)
-        self.assertTrue(user.is_active)
-        self.assertTrue(user.email_verified)
+        resend = self.post_json(
+            '/api/users/resend-verification',
+            {'email': user.email},
+        )
+        self.assertEqual(resend.status_code, 202)
+        self.assertEqual(len(mail.outbox), 1)
 
-        login_response = self.client.post(
-            "/api/v1/auth/token/",
+        login = self.post_json(
+            '/api/users/login',
+            {'identifier': user.username, 'password': 'Strong-Passphrase-90'},
+        )
+        self.assertEqual(login.status_code, 403)
+
+        verification = self.post_json(
+            '/api/users/verify-email',
+            {'email': user.email, 'otp': self.verification_code()},
+        )
+        self.assertEqual(verification.status_code, 200)
+
+        login = self.post_json(
+            '/api/users/login',
+            {'email': user.email, 'password': 'Strong-Passphrase-90'},
+        )
+        self.assertEqual(login.status_code, 200)
+        token = login.json()['access_token']
+        self.assertEqual(login.json()['user']['country'], 'United States')
+        self.assertEqual(login.json()['user']['username'], user.username)
+
+        denied = self.client.get(
+            '/api/users/me',
+            HTTP_AUTHORIZATION=f'Bearer {token}',
+        )
+        self.assertEqual(denied.status_code, 403)
+
+        permission = Permission.objects.get(codename='CanViewUserProfile')
+        permission.users.add(user)
+        allowed = self.client.get(
+            '/api/users/me',
+            HTTP_AUTHORIZATION=f'Bearer {token}',
+        )
+        self.assertEqual(allowed.status_code, 200)
+        self.assertEqual(allowed.json()['email'], user.email)
+        self.assertEqual(allowed.json()['country'], 'United States')
+
+    @override_settings(OTP_EXPIRY_SECONDS=937, OTP_RESEND_COOLDOWN_SECONDS=83)
+    def test_otp_endpoints_return_configured_expiry_and_resend_values(self):
+        signup = self.post_json(
+            '/api/users/signup',
             {
-                "identifier": user.email,
-                "password": "Long-Unique-Passphrase-2030!",
+                'username': 'timed_user',
+                'email': 'timed@example.com',
+                'phone_number': '+15551234571',
+                'country': 'United States',
+                'gender': 'other',
+                'password': 'Strong-Passphrase-90',
+                'confirm_password': 'Strong-Passphrase-90',
             },
-            format="json",
         )
-        self.assertEqual(login_response.status_code, 200)
-        self.assertIn("access", login_response.data)
+        self.assertEqual(signup.status_code, 201)
+        self.assertEqual(signup.json()['expires_in'], 937)
+        self.assertEqual(signup.json()['resend_in'], 83)
 
-    def test_email_and_phone_login_issue_tokens_immediately(self):
-        user = self.create_user()
+        resend = self.post_json(
+            '/api/users/resend-verification',
+            {'email': 'timed@example.com'},
+        )
+        self.assertEqual(resend.status_code, 202)
+        self.assertEqual(resend.json()['expires_in'], 937)
+        self.assertEqual(resend.json()['resend_in'], 83)
 
-        for identifier in (user.email, user.phone_number):
-            with self.subTest(identifier=identifier):
-                response = self.client.post(
-                    "/api/v1/auth/token/",
-                    {
-                        "identifier": identifier,
-                        "password": "Long-Unique-Passphrase-2030!",
-                    },
-                    format="json",
-                )
+        user = User.objects.get(email='timed@example.com')
+        user.is_active = True
+        user.save(update_fields=['is_active'])
+        reset = self.post_json(
+            '/api/users/forgot-password',
+            {'email': user.email},
+        )
+        self.assertEqual(reset.status_code, 202)
+        self.assertEqual(reset.json()['expires_in'], 937)
+        self.assertEqual(reset.json()['resend_in'], 83)
 
-                self.assertEqual(response.status_code, 200)
-                self.assertIn("access", response.data)
-                self.assertIn("refresh", response.data)
-                self.assertNotIn("challenge_id", response.data)
-                refresh_response = self.client.post(
-                    "/api/v1/auth/token/refresh/",
-                    {"refresh": response.data["refresh"]},
-                    format="json",
-                )
-                self.assertEqual(refresh_response.status_code, 200)
-
-    def test_unverified_user_cannot_login(self):
-        user = self.create_user(is_active=False, email_verified=False)
-        response = self.client.post(
-            "/api/v1/auth/token/",
-            {
-                "identifier": user.email,
-                "password": "Long-Unique-Passphrase-2030!",
-            },
-            format="json",
+    def test_superusers_receive_existing_and_future_capabilities(self):
+        superuser = User.objects.create_superuser(
+            email='root@example.com',
+            phone_number='+15551234570',
+            country='United States',
+            gender='other',
+            password='Root-Strong-Passphrase-90',
+        )
+        self.assertTrue(
+            all(
+                permission.users.filter(pk=superuser.pk).exists()
+                for permission in Permission.objects.all()
+            )
         )
 
-        self.assertEqual(response.status_code, 401)
+        class CanViewFutureEndpoint(CapabilityPermission):
+            name = 'CanViewFutureEndpoint'
 
-    @patch("users.views.send_auth_email")
-    def test_password_reset_changes_password_and_revokes_old_tokens(self, send_email):
-        user = self.create_user()
-        old_tokens = _issue_tokens(user)
-        response = self.client.post(
-            "/api/v1/auth/password-reset/",
-            {"email": user.email},
-            format="json",
-        )
+        @require_permission(CanViewFutureEndpoint)
+        def future_endpoint(request):
+            return JsonResponse({'ok': True})
+
+        request = RequestFactory().get('/future-endpoint')
+        request.META['HTTP_AUTHORIZATION'] = f'Bearer {issue_access_token(superuser)}'
+        response = future_endpoint(request)
 
         self.assertEqual(response.status_code, 200)
-        send_email.assert_called_once()
-        reset_path = urlsplit(send_email.call_args.args[2].split("\n\n")[-1]).path
-        reset_page = self.client.get(reset_path)
-        self.assertEqual(reset_page.status_code, 200)
-        self.assertContains(reset_page, "Choose a new password")
-        reset_response = self.client.post(
-            reset_path,
+        future_permission = Permission.objects.get(codename='CanViewFutureEndpoint')
+        self.assertTrue(future_permission.users.filter(pk=superuser.pk).exists())
+
+    def test_email_otp_is_single_use_and_limited_to_five_attempts(self):
+        self.post_json(
+            '/api/users/signup',
             {
-                "password": "Another-Unique-Passphrase-2031!",
-                "confirm_password": "Another-Unique-Passphrase-2031!",
+                'username': 'otp_user',
+                'email': 'otp@example.com',
+                'phone_number': '+15551234568',
+                'country': 'United States',
+                'gender': 'other',
+                'password': 'Strong-Passphrase-90',
+                'confirm_password': 'Strong-Passphrase-90',
             },
-            format="json",
         )
+        user = User.objects.get(email='otp@example.com')
+        wrong_code = '000000'
+        actual_code = self.verification_code()
+        if actual_code == wrong_code:
+            wrong_code = '000001'
 
-        self.assertEqual(reset_response.status_code, 200)
+        for _ in range(5):
+            response = self.post_json(
+                '/api/users/verify-email',
+                {'email': user.email, 'otp': wrong_code},
+            )
+        self.assertEqual(response.status_code, 400)
+        self.assertIsNotNone(EmailOTP.objects.get(user=user).consumed_at)
+        self.assertFalse(user.is_active)
+
+    def test_forgot_password_code_resets_password(self):
+        user_role = Role.objects.get(name='user')
+        user = User.objects.create_user(
+            email='reset@example.com',
+            phone_number='+15551234569',
+            country='United States',
+            gender='female',
+            password='Old-Strong-Passphrase-90',
+            role=user_role,
+        )
+        login = self.post_json(
+            '/api/users/login',
+            {'email': user.email, 'password': 'Old-Strong-Passphrase-90'},
+        )
+        token = login.json()['access_token']
+        profile_permission = Permission.objects.get_or_create(
+            codename='CanViewUserProfile',
+            defaults={'name': 'CanViewUserProfile'},
+        )[0]
+        profile_permission.users.add(user)
+
+        response = self.post_json(
+            '/api/users/forgot-password',
+            {'email': user.email},
+        )
+        self.assertEqual(response.status_code, 202)
+
+        mismatch = self.post_json(
+            '/api/users/reset-password',
+            {
+                'email': user.email,
+                'otp': self.verification_code(),
+                'new_password': 'New-Strong-Passphrase-90',
+                'confirm_password': 'Different-Strong-Passphrase-90',
+            },
+        )
+        self.assertEqual(mismatch.status_code, 400)
+
+        response = self.post_json(
+            '/api/users/reset-password',
+            {
+                'email': user.email,
+                'otp': self.verification_code(),
+                'new_password': 'New-Strong-Passphrase-90',
+                'confirm_password': 'New-Strong-Passphrase-90',
+            },
+        )
+        self.assertEqual(response.status_code, 200)
         user.refresh_from_db()
-        self.assertTrue(user.check_password("Another-Unique-Passphrase-2031!"))
-        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {old_tokens['access']}")
-        self.assertEqual(self.client.get("/api/v1/auth/me/").status_code, 401)
-        refresh_response = self.client.post(
-            "/api/v1/auth/token/refresh/",
-            {"refresh": old_tokens["refresh"]},
-            format="json",
+        self.assertTrue(user.check_password('New-Strong-Passphrase-90'))
+        self.assertFalse(user.check_password('Old-Strong-Passphrase-90'))
+        revoked = self.client.get(
+            '/api/users/me',
+            HTTP_AUTHORIZATION=f'Bearer {token}',
         )
-        self.assertEqual(refresh_response.status_code, 401)
+        self.assertEqual(revoked.status_code, 401)
 
-    def test_smtp_delivery_uses_environment_configuration(self):
-        smtp_settings = {
-            "EMAIL_HOST": "smtp.example.com",
-            "EMAIL_PORT": "587",
-            "EMAIL_HOST_USER": "mailer",
-            "EMAIL_HOST_PASSWORD": "test-password",
-            "EMAIL_USE_TLS": "True",
-            "EMAIL_USE_SSL": "False",
-            "DEFAULT_FROM_EMAIL": "noreply@example.com",
-        }
-        with (
-            patch.dict(os.environ, smtp_settings),
-            patch("users.notifications.get_connection") as get_connection,
-            patch("users.notifications.EmailMultiAlternatives") as email_class,
-        ):
-            email_class.return_value.send.return_value = 1
-            send_auth_email("person@example.com", "Subject", "Body")
+    def test_translation_routes_are_permission_protected_and_health_is_public(self):
+        health = self.client.get('/api/health')
+        self.assertEqual(health.status_code, 200)
 
-        self.assertEqual(get_connection.call_args.kwargs["host"], "smtp.example.com")
-        self.assertEqual(get_connection.call_args.kwargs["port"], 587)
-        self.assertEqual(
-            email_class.call_args.kwargs["from_email"],
-            "noreply@example.com",
+        response = self.client.post(
+            '/api/translate_text',
+            data='{}',
+            content_type='application/json',
         )
+        self.assertEqual(response.status_code, 401)
+        self.assertIn('Authorization', response['Access-Control-Allow-Headers'])
+
+        preflight = self.client.options('/api/translate_text')
+        self.assertEqual(preflight.status_code, 204)
+
+    def test_user_api_view_rejects_unsupported_methods_with_json(self):
+        response = self.client.get('/api/users/signup')
+        self.assertEqual(response.status_code, 405)
