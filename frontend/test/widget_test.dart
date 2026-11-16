@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:translation_platform/screens/auth/auth_screen.dart';
 import 'package:translation_platform/providers/auth_provider.dart';
 import 'package:translation_platform/screens/home/home_screen.dart';
+import 'package:translation_platform/widgets/app_sidebar.dart';
 
 void expectLoginBlueButton(
   WidgetTester tester,
@@ -301,6 +302,43 @@ void main() {
     expect(provider.isAuthenticated, isFalse);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('sidebar logout returns to the login and signup screen',
+      (tester) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final provider = _TestAuthProvider();
+
+    await tester.pumpWidget(
+      MultiProvider(
+        providers: [
+          ChangeNotifierProvider<AuthProvider>.value(value: provider),
+          ChangeNotifierProvider(create: (_) => AppSidebarController()),
+        ],
+        child: MaterialApp(
+          home: Consumer<AuthProvider>(
+            builder: (context, auth, _) => auth.isAuthenticated
+                ? const _AuthenticatedTestHome()
+                : const AuthScreen(),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('Open translation'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Open navigation menu'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Log out'));
+    await tester.pumpAndSettle();
+
+    expect(provider.isAuthenticated, isFalse);
+    expect(find.text('Welcome back'), findsOneWidget);
+    expect(find.text('Create account'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
 }
 
 void expectOtpExpiryShown(WidgetTester tester, {required int minutes}) {
@@ -406,5 +444,41 @@ class _TestAuthProvider extends AuthProvider {
   Future<void> logout() async {
     _loggedOut = true;
     notifyListeners();
+  }
+}
+
+class _AuthenticatedTestHome extends StatelessWidget {
+  const _AuthenticatedTestHome();
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: Center(
+        child: TextButton(
+          onPressed: () {
+            Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => const _AuthenticatedTestPage(),
+              ),
+            );
+          },
+          child: const Text('Open translation'),
+        ),
+      ),
+    );
+  }
+}
+
+class _AuthenticatedTestPage extends StatelessWidget {
+  const _AuthenticatedTestPage();
+
+  @override
+  Widget build(BuildContext context) {
+    return AppPageShell(
+      child: Scaffold(
+        appBar: AppBar(leading: const AppMenuButton()),
+        body: const SizedBox.shrink(),
+      ),
+    );
   }
 }

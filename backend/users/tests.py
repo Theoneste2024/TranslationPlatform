@@ -229,6 +229,33 @@ class UserAuthenticationTests(TestCase):
         future_permission = Permission.objects.get(codename='CanViewFutureEndpoint')
         self.assertTrue(future_permission.users.filter(pk=superuser.pk).exists())
 
+    def test_user_role_can_reach_all_translation_endpoints_by_default(self):
+        user = User.objects.create_user(
+            email='translator@example.com',
+            username='translator',
+            phone_number='+15551234573',
+            country='United States',
+            gender='other',
+            password='Translator-Strong-Passphrase-90',
+            role=Role.objects.get(name='user'),
+        )
+        token = issue_access_token(user)
+        endpoints = (
+            '/api/v1/translate_text/',
+            '/api/v1/speech_translate/',
+            '/api/v1/analyze_video/',
+        )
+
+        for endpoint in endpoints:
+            with self.subTest(endpoint=endpoint):
+                response = self.client.post(
+                    endpoint,
+                    data='{}',
+                    content_type='application/json',
+                    HTTP_AUTHORIZATION=f'Bearer {token}',
+                )
+                self.assertEqual(response.status_code, 400, response.content)
+
     def test_email_otp_is_single_use_and_limited_to_five_attempts(self):
         self.post_json(
             '/api/users/signup',
@@ -318,6 +345,9 @@ class UserAuthenticationTests(TestCase):
         health = self.client.get('/api/health')
         self.assertEqual(health.status_code, 200)
 
+        versioned_health = self.client.get('/api/v1/health/')
+        self.assertEqual(versioned_health.status_code, 200)
+
         response = self.client.post(
             '/api/translate_text',
             data='{}',
@@ -328,6 +358,9 @@ class UserAuthenticationTests(TestCase):
 
         preflight = self.client.options('/api/translate_text')
         self.assertEqual(preflight.status_code, 204)
+
+        versioned_preflight = self.client.options('/api/v1/translate_text/')
+        self.assertEqual(versioned_preflight.status_code, 204)
 
     def test_user_api_view_rejects_unsupported_methods_with_json(self):
         response = self.client.get('/api/users/signup')
