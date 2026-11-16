@@ -30,8 +30,18 @@ migrate_working_dir/
 .flutter-plugins-dependencies
 .pub-cache/
 .pub/
-/build/
-/coverage/
+/frontend/build/
+/frontend/coverage/
+
+# Python backend
+__pycache__/
+*.py[cod]
+**/venv/
+**/venv_old_space_path/
+backend/.venv/
+backend/db.sqlite3
+.env
+/backend/.env
 
 # Symbolication related
 app.*.symbols
@@ -40,6 +50,6 @@ app.*.symbols
 app.*.map.json
 
 # Android Studio will place build artifacts here
-/android/app/debug
-/android/app/profile
-/android/app/release
+/frontend/android/app/debug
+/frontend/android/app/profile
+/frontend/android/app/release
