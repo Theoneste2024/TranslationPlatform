@@ -11,6 +11,8 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from users.permissions import BearerTokenAuthentication
+
 from . import video_service
 from .models import Translation
 from .serializers import (
@@ -125,6 +127,7 @@ class HealthView(APIView):
 
 
 class TranslateTextView(APIView):
+    authentication_classes = [BearerTokenAuthentication]
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
@@ -172,6 +175,7 @@ Text:
 
 
 class SpeechTranslateView(APIView):
+    authentication_classes = [BearerTokenAuthentication]
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
@@ -283,6 +287,7 @@ Text:
 
 
 class AnalyzeVideoView(APIView):
+    authentication_classes = [BearerTokenAuthentication]
     permission_classes = [IsAuthenticated]
 
     def post(self, request):

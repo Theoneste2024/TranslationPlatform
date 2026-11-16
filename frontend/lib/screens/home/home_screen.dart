@@ -353,9 +353,12 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _logout(BuildContext context, {bool closeDrawer = false}) async {
-    if (closeDrawer) Navigator.pop(context);
+    final navigator = Navigator.of(context);
+    if (closeDrawer) navigator.pop();
     try {
       await context.read<AuthProvider>().logout();
+      if (!context.mounted) return;
+      navigator.popUntil((route) => route.isFirst);
     } on AuthException catch (error) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

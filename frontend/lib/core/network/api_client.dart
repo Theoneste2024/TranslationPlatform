@@ -4,12 +4,15 @@ import 'dart:convert';
 import 'package:dio/dio.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'api_config.dart';
 
 class ApiClient {
   static const _accessTokenKey = 'access_token';
   static const _refreshTokenKey = 'refresh_token';
+  static const _authProviderAccessTokenKey = 'auth_access_token';
+  static const _authProviderExpiryKey = 'auth_token_expiry';
 
   final FlutterSecureStorage _storage;
   final Dio dio;
@@ -136,6 +139,15 @@ class ApiClient {
   }
 
   Future<String?> _accessToken() async {
+    final preferences = await SharedPreferences.getInstance();
+    final sessionToken = preferences.getString(_authProviderAccessTokenKey);
+    final expiresAt = preferences.getInt(_authProviderExpiryKey);
+    if (sessionToken != null &&
+        expiresAt != null &&
+        expiresAt > DateTime.now().millisecondsSinceEpoch) {
+      return sessionToken;
+    }
+
     final accessToken = await _storage.read(key: _accessTokenKey);
     if (accessToken != null && !_expiresSoon(accessToken)) {
       return accessToken;

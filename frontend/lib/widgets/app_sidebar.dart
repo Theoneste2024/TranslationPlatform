@@ -240,6 +240,11 @@ class _SidebarContents extends StatelessWidget {
                   title: 'About',
                   onTap: () => _showAboutDialog(context),
                 ),
+                _actionItem(
+                  icon: Icons.logout,
+                  title: 'Log out',
+                  onTap: () => _logout(context),
+                ),
               ]
             : [
                 Center(
@@ -435,6 +440,20 @@ class _SidebarContents extends StatelessWidget {
       navigator.pushNamedAndRemoveUntil(
         route,
         (entry) => entry.isFirst,
+      );
+    }
+  }
+
+  Future<void> _logout(BuildContext context) async {
+    final navigator = Navigator.of(context);
+    try {
+      await context.read<AuthProvider>().logout();
+      if (!context.mounted) return;
+      navigator.popUntil((route) => route.isFirst);
+    } on AuthException catch (error) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(error.message)),
       );
     }
   }
