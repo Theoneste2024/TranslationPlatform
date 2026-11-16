@@ -1,28 +1,41 @@
 from django.urls import path
 
-from .views import (
-    CurrentUserView,
-    LoginView,
-    PasswordResetConfirmView,
-    PasswordResetRequestView,
-    RegisterView,
-    ResendVerificationView,
-    VerifyEmailView,
-    VersionedTokenRefreshView,
-)
-
+from . import views
 
 urlpatterns = [
-    path("register/", RegisterView.as_view(), name="register"),
-    path("verify-email/resend/", ResendVerificationView.as_view(), name="email_verify_resend"),
-    path("verify-email/<str:token>/", VerifyEmailView.as_view(), name="email_verify"),
-    path("token/", LoginView.as_view(), name="token_obtain_pair"),
-    path("token/refresh/", VersionedTokenRefreshView.as_view(), name="token_refresh"),
-    path("password-reset/", PasswordResetRequestView.as_view(), name="password_reset"),
     path(
-        "password-reset/confirm/<uidb64>/<token>/",
-        PasswordResetConfirmView.as_view(),
-        name="password_reset_confirm",
+        'api/users/signup',
+        views.SignupView.as_view(),
+        name='users-signup',
     ),
-    path("me/", CurrentUserView.as_view(), name="current_user"),
+    path(
+        'api/users/verify-email',
+        views.VerifyEmailView.as_view(),
+        name='users-verify-email',
+    ),
+    path(
+        'api/users/resend-verification',
+        views.ResendVerificationView.as_view(),
+        name='users-resend-verification',
+    ),
+    path(
+        'api/users/login',
+        views.LoginView.as_view(),
+        name='users-login',
+    ),
+    path(
+        'api/users/forgot-password',
+        views.ForgotPasswordView.as_view(),
+        name='users-forgot-password',
+    ),
+    path(
+        'api/users/reset-password',
+        views.ResetPasswordView.as_view(),
+        name='users-reset-password',
+    ),
+    path(
+        'api/users/me',
+        views.ProfileView.as_view(),
+        name='users-profile',
+    ),
 ]

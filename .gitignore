@@ -1,22 +1,16 @@
-# Miscellaneous
-*.class
-*.log
-*.pyc
-*.swp
-.DS_Store
-.atom/
-.build/
-.buildlog/
-.history
-.svn/
-.swiftpm/
-migrate_working_dir/
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
 
-# IntelliJ related
-*.iml
-*.ipr
-*.iws
+# Logs and operating-system files
+*.log
+.DS_Store
+
+# IDE files
 .idea/
+*.iml
 
 # The .vscode folder contains launch configuration and tasks you configure in
 # VS Code which you may wish to be included in version control, so this line
