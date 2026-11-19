@@ -18,7 +18,19 @@ A Flutter mobile application for multilingual translation.
 - Dart
 - REST API
 
-## Developer
+## Developers
+Aline Barakabaho
+Software Developer
+0784924696
+millabarakabaho@gmail.com
+
+Monique Uwase
+Software Developer
+0786394097
+moniqueuwase45@gmail.com
+
+## Project Management team
+
 Theoneste Isezerano  
 Data Scientist
 0785446324

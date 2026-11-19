@@ -1,4 +1,37 @@
 class Languages {
+  static const List<LanguageModel> translationLanguages = [
+    LanguageModel(
+      code: 'en',
+      name: 'English',
+      nativeName: 'English',
+      flagEmoji: '🇬🇧',
+    ),
+    LanguageModel(
+      code: 'fr',
+      name: 'French',
+      nativeName: 'Français',
+      flagEmoji: '🇫🇷',
+    ),
+    LanguageModel(
+      code: 'rw',
+      name: 'Kinyarwanda',
+      nativeName: 'Ikinyarwanda',
+      flagEmoji: '🇷🇼',
+    ),
+    LanguageModel(
+      code: 'sw',
+      name: 'Kiswahili',
+      nativeName: 'Kiswahili',
+      flagEmoji: '🇹🇿',
+    ),
+    LanguageModel(
+      code: 'zh',
+      name: 'Chinese',
+      nativeName: '中文',
+      flagEmoji: '🇨🇳',
+    ),
+  ];
+
   static const List<LanguageModel> africanLanguages = [
     LanguageModel(
       code: 'rw',
@@ -31,11 +64,19 @@ class Languages {
   ];
 
   static const List<LanguageModel> globalLanguages = [
-    LanguageModel(code: 'es', name: 'Spanish', nativeName: 'Español', flagEmoji: '🇪🇸'),
-    LanguageModel(code: 'de', name: 'German', nativeName: 'Deutsch', flagEmoji: '🇩🇪'),
-    LanguageModel(code: 'zh', name: 'Chinese', nativeName: '中文', flagEmoji: '🇨🇳'),
-    LanguageModel(code: 'ar', name: 'Arabic', nativeName: 'العربية', flagEmoji: '🇸🇦'),
-    LanguageModel(code: 'pt', name: 'Portuguese', nativeName: 'Português', flagEmoji: '🇵🇹'),
+    LanguageModel(
+        code: 'es', name: 'Spanish', nativeName: 'Español', flagEmoji: '🇪🇸'),
+    LanguageModel(
+        code: 'de', name: 'German', nativeName: 'Deutsch', flagEmoji: '🇩🇪'),
+    LanguageModel(
+        code: 'zh', name: 'Chinese', nativeName: '中文', flagEmoji: '🇨🇳'),
+    LanguageModel(
+        code: 'ar', name: 'Arabic', nativeName: 'العربية', flagEmoji: '🇸🇦'),
+    LanguageModel(
+        code: 'pt',
+        name: 'Portuguese',
+        nativeName: 'Português',
+        flagEmoji: '🇵🇹'),
   ];
 }
 

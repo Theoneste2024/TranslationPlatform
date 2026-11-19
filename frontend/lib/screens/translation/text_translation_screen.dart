@@ -1,12 +1,15 @@
-import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-import 'package:flutter_tts/flutter_tts.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:async';
 import 'dart:convert';
-import 'package:provider/provider.dart';
 
-import '../../l10n/app_localizations_extensions.dart';
+import 'package:audioplayers/audioplayers.dart';
+import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+import '../../core/constants/languages.dart';
 import '../../core/network/api_client.dart';
 import '../../widgets/app_header.dart';
 import '../../widgets/app_sidebar.dart';
@@ -21,28 +24,59 @@ class TextTranslationScreen extends StatefulWidget {
 class _TextTranslationScreenState extends State<TextTranslationScreen> {
   final TextEditingController _sourceController = TextEditingController();
   final TextEditingController _targetController = TextEditingController();
-  final FlutterTts _flutterTts = FlutterTts();
+  final AudioPlayer _audioPlayer = AudioPlayer();
+  StreamSubscription<void>? _audioCompleteSubscription;
+  CancelToken? _speechCancelToken;
   String _lastTranslatedInput = '';
   String _sourceLanguage = 'en';
   String _targetLanguage = 'fr';
   bool _isTranslating = false;
+  bool _isGeneratingSpeech = false;
   bool _isSpeaking = false;
   final Set<String> _favoriteTranslations = {};
 
   static const String _favoritesKey = 'text_translation_favorites';
+  static final Uint8List _silentWav = _createSilentWav();
 
-  final List<Map<String, String>> _languages = [
-    {'code': 'en', 'name': 'English', 'flag': '🇬🇧'},
-    {'code': 'fr', 'name': 'French', 'flag': '🇫🇷'},
-    {'code': 'rw', 'name': 'Kinyarwanda', 'flag': '🇷🇼'},
-  ];
+  static Uint8List _createSilentWav() {
+    const pcmSize = 480;
+    final wav = Uint8List(44 + pcmSize);
+    final data = ByteData.view(wav.buffer);
+
+    void writeId(int offset, String value) {
+      for (var index = 0; index < value.length; index++) {
+        wav[offset + index] = value.codeUnitAt(index);
+      }
+    }
+
+    writeId(0, 'RIFF');
+    data.setUint32(4, wav.length - 8, Endian.little);
+    writeId(8, 'WAVE');
+    writeId(12, 'fmt ');
+    data.setUint32(16, 16, Endian.little);
+    data.setUint16(20, 1, Endian.little);
+    data.setUint16(22, 1, Endian.little);
+    data.setUint32(24, 24000, Endian.little);
+    data.setUint32(28, 48000, Endian.little);
+    data.setUint16(32, 2, Endian.little);
+    data.setUint16(34, 16, Endian.little);
+    writeId(36, 'data');
+    data.setUint32(40, pcmSize, Endian.little);
+    return wav;
+  }
+
+  final List<LanguageModel> _languages = Languages.translationLanguages;
 
   @override
   void initState() {
     super.initState();
     _sourceController.addListener(_handleTextChanged);
     _targetController.addListener(_handleTextChanged);
-    _initTts();
+    _audioCompleteSubscription = _audioPlayer.onPlayerComplete.listen((_) {
+      if (mounted) {
+        setState(() => _isSpeaking = false);
+      }
+    });
     _loadFavorites();
   }
 
@@ -53,24 +87,14 @@ class _TextTranslationScreenState extends State<TextTranslationScreen> {
     if (!_isTranslating &&
         _targetController.text.isNotEmpty &&
         sourceText != _lastTranslatedInput) {
-      _flutterTts.stop();
+      unawaited(_stopSpeaking());
+      _isGeneratingSpeech = false;
       _isSpeaking = false;
       _lastTranslatedInput = '';
       _targetController.clear();
     }
 
     setState(() {});
-  }
-
-  Future<void> _initTts() async {
-    await _flutterTts.setSpeechRate(0.5);
-    await _flutterTts.setVolume(1.0);
-    await _flutterTts.setPitch(1.0);
-    _flutterTts.setCompletionHandler(() {
-      if (mounted) {
-        setState(() => _isSpeaking = false);
-      }
-    });
   }
 
   Future<void> _loadFavorites() async {
@@ -90,7 +114,9 @@ class _TextTranslationScreenState extends State<TextTranslationScreen> {
     _targetController.removeListener(_handleTextChanged);
     _sourceController.dispose();
     _targetController.dispose();
-    _flutterTts.stop();
+    _speechCancelToken?.cancel('Translation screen disposed.');
+    unawaited(_audioCompleteSubscription?.cancel());
+    unawaited(_audioPlayer.dispose());
     super.dispose();
   }
 
@@ -99,6 +125,7 @@ class _TextTranslationScreenState extends State<TextTranslationScreen> {
     final text = _sourceController.text.trim();
     if (text.isEmpty) return;
 
+    unawaited(_stopSpeaking());
     setState(() => _isTranslating = true);
 
     try {
@@ -110,7 +137,7 @@ class _TextTranslationScreenState extends State<TextTranslationScreen> {
           'source_language': _getLanguageName(_sourceLanguage),
           'target_language': _getLanguageName(_targetLanguage),
         },
-      ).timeout(const Duration(seconds: 20));
+      ).timeout(const Duration(seconds: 60));
 
       final translatedText =
           response.data?['translated_text']?.toString() ?? '';
@@ -170,27 +197,115 @@ class _TextTranslationScreenState extends State<TextTranslationScreen> {
       _sourceController.text = _targetController.text;
       _targetController.text = tempText;
       _lastTranslatedInput = '';
+      _isGeneratingSpeech = false;
       _isSpeaking = false;
-      _flutterTts.stop();
     });
-  }
-
-  String _languageLocale(String code) {
-    switch (code) {
-      case 'fr':
-        return 'fr-FR';
-      case 'rw':
-        return 'rw-RW';
-      default:
-        return 'en-US';
-    }
+    unawaited(_stopSpeaking());
   }
 
   Future<void> _speakTranslation() async {
-    if (_targetController.text.isEmpty) return;
-    setState(() => _isSpeaking = true);
-    await _flutterTts.setLanguage(_languageLocale(_targetLanguage));
-    await _flutterTts.speak(_targetController.text);
+    final text = _targetController.text.trim();
+    if (text.isEmpty || _isGeneratingSpeech || _isSpeaking) return;
+
+    final cancelToken = CancelToken();
+    _speechCancelToken = cancelToken;
+    setState(() => _isGeneratingSpeech = true);
+
+    var playbackStarted = false;
+    try {
+      if (kIsWeb) {
+        await _audioPlayer.play(
+          BytesSource(_silentWav, mimeType: 'audio/wav'),
+        );
+        if (!mounted || cancelToken.isCancelled) return;
+      }
+
+      final response = await context
+          .read<ApiClient>()
+          .dio
+          .post<Map<String, dynamic>>(
+            'translate_text/speech/',
+            data: {
+              'text': text,
+              'target_language': _getLanguageName(_targetLanguage),
+            },
+            cancelToken: cancelToken,
+          )
+          .timeout(
+        const Duration(seconds: 75),
+        onTimeout: () {
+          cancelToken.cancel('Speech generation timed out.');
+          throw TimeoutException('Speech generation timed out.');
+        },
+      );
+      if (!mounted || cancelToken.isCancelled) return;
+
+      final audioBase64 = response.data?['audio_base64']?.toString();
+      if (audioBase64 == null || audioBase64.isEmpty) {
+        throw const FormatException('Speech response did not contain audio.');
+      }
+      final mimeType =
+          response.data?['audio_mime_type']?.toString() ?? 'audio/wav';
+      setState(() {
+        _isGeneratingSpeech = false;
+        _isSpeaking = true;
+      });
+      await _audioPlayer.play(
+        BytesSource(base64Decode(audioBase64), mimeType: mimeType),
+      );
+      playbackStarted = true;
+    } on DioException catch (error) {
+      if (CancelToken.isCancel(error) || !mounted) return;
+      final responseData = error.response?.data;
+      final message = responseData is Map<String, dynamic>
+          ? responseData['error']?.toString()
+          : null;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content:
+              Text(message ?? 'Speech generation failed. Please try again.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    } on TimeoutException {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Speech generation timed out. Please try again.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Could not play translation: $error'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    } finally {
+      if (identical(_speechCancelToken, cancelToken)) {
+        _speechCancelToken = null;
+      }
+      if (mounted) {
+        setState(() {
+          _isGeneratingSpeech = false;
+          if (!playbackStarted) _isSpeaking = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _stopSpeaking() async {
+    _speechCancelToken?.cancel('Speech playback stopped.');
+    _speechCancelToken = null;
+    if (mounted && (_isGeneratingSpeech || _isSpeaking)) {
+      setState(() {
+        _isGeneratingSpeech = false;
+        _isSpeaking = false;
+      });
+    }
+    await _audioPlayer.stop();
   }
 
   Future<void> _copyTranslation() async {
@@ -258,14 +373,14 @@ class _TextTranslationScreenState extends State<TextTranslationScreen> {
     required String selectedCode,
     required ValueChanged<String?> onChanged,
   }) {
-    Widget languageLabel(Map<String, String> language) {
+    Widget languageLabel(LanguageModel language) {
       return Row(
         children: [
-          Text(language['flag']!),
+          Text(language.flagEmoji),
           const SizedBox(width: 4),
           Expanded(
             child: Text(
-              language['name']!,
+              language.name,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
             ),
@@ -286,7 +401,7 @@ class _TextTranslationScreenState extends State<TextTranslationScreen> {
               _languages.map(languageLabel).toList(),
           items: _languages.map((language) {
             return DropdownMenuItem<String>(
-              value: language['code'],
+              value: language.code,
               child: languageLabel(language),
             );
           }).toList(),
@@ -334,7 +449,7 @@ class _TextTranslationScreenState extends State<TextTranslationScreen> {
                           _lastTranslatedInput = '';
                           _isSpeaking = false;
                         });
-                        _flutterTts.stop();
+                        unawaited(_stopSpeaking());
                       },
                     ),
                     IconButton(
@@ -352,7 +467,7 @@ class _TextTranslationScreenState extends State<TextTranslationScreen> {
                           _lastTranslatedInput = '';
                           _isSpeaking = false;
                         });
-                        _flutterTts.stop();
+                        unawaited(_stopSpeaking());
                       },
                     ),
                   ],
@@ -544,17 +659,27 @@ class _TextTranslationScreenState extends State<TextTranslationScreen> {
                                   color: Colors.blue.shade700,
                                 ),
                                 IconButton(
-                                  icon: Icon(
-                                    _isSpeaking ? Icons.stop : Icons.volume_up,
-                                  ),
+                                  icon: _isGeneratingSpeech
+                                      ? const SizedBox(
+                                          width: 18,
+                                          height: 18,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                          ),
+                                        )
+                                      : Icon(
+                                          _isSpeaking
+                                              ? Icons.stop
+                                              : Icons.volume_up,
+                                        ),
                                   onPressed: _targetController.text.isEmpty
                                       ? null
                                       : () {
-                                          if (_isSpeaking) {
-                                            _flutterTts.stop();
-                                            setState(() => _isSpeaking = false);
+                                          if (_isGeneratingSpeech ||
+                                              _isSpeaking) {
+                                            unawaited(_stopSpeaking());
                                           } else {
-                                            _speakTranslation();
+                                            unawaited(_speakTranslation());
                                           }
                                         },
                                   color: Colors.blue.shade700,
@@ -584,15 +709,9 @@ class _TextTranslationScreenState extends State<TextTranslationScreen> {
   }
 
   String _getLanguageName(String code) {
-    switch (code) {
-      case 'en':
-        return 'English';
-      case 'fr':
-        return 'French';
-      case 'rw':
-        return 'Kinyarwanda';
-      default:
-        return '';
+    for (final language in Languages.translationLanguages) {
+      if (language.code == code) return language.name;
     }
+    return '';
   }
 }

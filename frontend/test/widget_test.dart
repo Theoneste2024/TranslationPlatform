@@ -199,6 +199,7 @@ void main() {
     }
   });
 
+<<<<<<< HEAD
   testWidgets('auth layout handles a zero-sized startup viewport',
       (tester) async {
     tester.view.physicalSize = Size.zero;
@@ -208,6 +209,22 @@ void main() {
 
     await _pumpAuthApp(tester);
     await tester.pump();
+=======
+  testWidgets('auth screen tolerates a zero-sized initial viewport',
+      (tester) async {
+    await tester.pumpWidget(
+      ChangeNotifierProvider(
+        create: (_) => AuthProvider(dio: _fakeAuthDio()),
+        child: const MaterialApp(
+          home: SizedBox(
+            width: 0,
+            height: 0,
+            child: AuthScreen(),
+          ),
+        ),
+      ),
+    );
+>>>>>>> fce4478 (Speech translation changes and removing some features)
 
     expect(tester.takeException(), isNull);
   });

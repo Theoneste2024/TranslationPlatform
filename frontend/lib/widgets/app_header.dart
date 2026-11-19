@@ -9,22 +9,17 @@ import '../providers/auth_provider.dart';
 
 class AppBrandControls extends StatelessWidget {
   const AppBrandControls({
-    this.logoAssetPath = AppBrandLogo.primeLogoAssetPath,
     super.key,
   });
 
-  final String logoAssetPath;
-
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(right: 8),
+    return const Padding(
+      padding: EdgeInsets.only(right: 8),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const AppLanguageSelector(),
-          const SizedBox(width: 8),
-          AppBrandLogo(assetPath: logoAssetPath),
+          AppLanguageSelector(),
         ],
       ),
     );
@@ -145,21 +140,21 @@ class AppBrandLogo extends StatelessWidget {
   Widget build(BuildContext context) {
     if (assetPath == primeLogoAssetPath) {
       return SizedBox(
-        width: 30,
-        height: 30,
+        width: 44,
+        height: 44,
         child: Image.asset(assetPath, fit: BoxFit.contain),
       );
     }
 
     return SizedBox(
-      width: 30,
-      height: 30,
+      width: 44,
+      height: 44,
       child: ClipRect(
         child: OverflowBox(
-          minWidth: 52,
-          maxWidth: 52,
-          minHeight: 52,
-          maxHeight: 52,
+          minWidth: 64,
+          maxWidth: 64,
+          minHeight: 64,
+          maxHeight: 64,
           child: Image.asset(
             assetPath,
             fit: BoxFit.cover,

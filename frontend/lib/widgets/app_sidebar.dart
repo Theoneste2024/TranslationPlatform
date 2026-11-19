@@ -8,16 +8,13 @@ import '../l10n/app_localizations_extensions.dart';
 
 import '../core/constants/system_ui.dart';
 import '../providers/auth_provider.dart';
+import 'app_header.dart';
 
 class AppRoutes {
   static const home = '/home';
   static const textTranslation = '/text-translation';
   static const speechTranslation = '/speech-translation';
-  static const videoTranslation = '/video-translation';
-  static const cameraTranslation = '/camera-translation';
-  static const educationTools = '/education-tools';
-  static const offlinePacks = '/offline-packs';
-  static const driverMode = '/driver-mode';
+  static const adverts = '/adverts';
   static const maps = '/maps';
   static const settings = '/settings';
 }
@@ -191,36 +188,9 @@ class _SidebarContents extends StatelessWidget {
                 ),
                 _item(
                   context,
-                  icon: Icons.video_library,
-                  title: context.l10n.videoTranslation,
-                  route: AppRoutes.videoTranslation,
-                ),
-                _item(
-                  context,
-                  icon: Icons.camera_alt,
-                  title: context.l10n.cameraTranslation,
-                  route: AppRoutes.cameraTranslation,
-                ),
-                _item(
-                  context,
-                  icon: Icons.school,
-                  title: context.l10n.educationTools,
-                  subtitle: context.l10n.underDevelopment,
-                  route: AppRoutes.educationTools,
-                ),
-                _item(
-                  context,
-                  icon: Icons.offline_bolt,
-                  title: context.l10n.offlinePacks,
-                  subtitle: context.l10n.underDevelopment,
-                  route: AppRoutes.offlinePacks,
-                ),
-                _item(
-                  context,
-                  icon: Icons.motorcycle,
-                  title: context.l10n.driverMode,
-                  subtitle: context.l10n.underDevelopment,
-                  route: AppRoutes.driverMode,
+                  icon: Icons.campaign,
+                  title: 'Adverts',
+                  route: AppRoutes.adverts,
                 ),
                 _item(
                   context,
@@ -290,6 +260,10 @@ class _SidebarContents extends StatelessWidget {
           children: [
             Row(
               children: [
+                const AppBrandLogo(
+                  assetPath: 'assets/images/logo.png',
+                ),
+                const SizedBox(width: 8),
                 const Text(
                   'MPUZA',
                   style: TextStyle(
