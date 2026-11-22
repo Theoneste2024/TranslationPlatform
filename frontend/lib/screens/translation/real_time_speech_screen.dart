@@ -1,11 +1,9 @@
-// ignore_for_file: use_build_context_synchronously
+import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
-import 'package:flutter_tts/flutter_tts.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:audioplayers/audioplayers.dart';
 import 'package:dio/dio.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:provider/provider.dart';
@@ -15,7 +13,6 @@ import '../../core/constants/languages.dart';
 import '../../core/network/api_client.dart';
 import '../../widgets/app_sidebar.dart';
 import '../../widgets/app_header.dart';
-import 'package:flutter/services.dart';
 import 'web_speech_recognizer_stub.dart'
     if (dart.library.html) 'web_speech_recognizer_web.dart';
 
@@ -27,36 +24,30 @@ class RealTimeSpeechScreen extends StatefulWidget {
 }
 
 class _RealTimeSpeechScreenState extends State<RealTimeSpeechScreen>
-    with SingleTickerProviderStateMixin {
-  // Speech & TTS
+    with TickerProviderStateMixin {
   late stt.SpeechToText _speech;
-  late FlutterTts _flutterTts;
   late WebSpeechRecognizer _webSpeechRecognizer;
-  final AudioPlayer _audioPlayer = AudioPlayer();
+
+  late final AnimationController _heartbeatController;
+  late final AnimationController _waveController;
+  Timer? _recordingTimer;
+  DateTime? _recordingStartedAt;
+  int _recordingElapsedSeconds = 0;
+  bool _reduceMotion = false;
 
   // UI States
   bool _isListening = false;
   bool _isTranslating = false;
-  bool _isPlayingAudio = false;
   bool _isUploading = false;
 
   // Text Content
-  String _recognizedText = '';
   String _translatedText = '';
   String _sourceLanguage = 'en';
   String _targetLanguage = 'fr';
-  double _confidence = 0.0;
-
-  // Output Options
-  bool _outputText = true;
-  bool _outputAudio = true;
-
-  // Animation
-  late AnimationController _animationController;
+  String? _translationError;
 
   // Audio File Upload
   PlatformFile? _selectedAudioFile;
-  String? _fileName;
 
   // History
   final List<Map<String, dynamic>> _conversationHistory = [];
@@ -66,40 +57,82 @@ class _RealTimeSpeechScreenState extends State<RealTimeSpeechScreen>
     super.initState();
     _speech = stt.SpeechToText();
     _webSpeechRecognizer = WebSpeechRecognizer();
-    _flutterTts = FlutterTts();
-    _animationController = AnimationController(
+    _heartbeatController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 1500),
+      duration: const Duration(milliseconds: 1200),
     );
-    _initTTS();
+    _waveController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 2400),
+    );
+  }
 
-    // Set up audio player completion handler
-    _audioPlayer.onPlayerComplete.listen((event) {
-      setState(() => _isPlayingAudio = false);
-    });
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final reduceMotion = MediaQuery.maybeDisableAnimationsOf(context) ?? false;
+    if (reduceMotion != _reduceMotion) {
+      _reduceMotion = reduceMotion;
+      _syncRecordingAnimations();
+    }
   }
 
   @override
   void dispose() {
+    _recordingTimer?.cancel();
+    _heartbeatController.dispose();
+    _waveController.dispose();
     _speech.stop();
-    _flutterTts.stop();
-    _audioPlayer.dispose();
-    _animationController.dispose();
     super.dispose();
   }
 
-  // ============ TEXT-TO-SPEECH INIT ============
-  Future<void> _initTTS() async {
-    String locale = _targetLanguage == 'fr' ? 'fr-FR' : 'en-US';
+  void _setListening(bool listening) {
+    if (!mounted) return;
+    setState(() => _isListening = listening);
+    if (listening) {
+      _startRecordingVisuals();
+    } else {
+      _stopRecordingVisuals();
+    }
+  }
 
-    await _flutterTts.setLanguage(locale);
-    await _flutterTts.setSpeechRate(0.5);
-    await _flutterTts.setVolume(1.0);
-    await _flutterTts.setPitch(1.0);
-
-    _flutterTts.setCompletionHandler(() {
-      setState(() => _isPlayingAudio = false);
+  void _startRecordingVisuals() {
+    _recordingStartedAt = DateTime.now();
+    _recordingElapsedSeconds = 0;
+    _recordingTimer?.cancel();
+    _recordingTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (!mounted || !_isListening) return;
+      setState(() {
+        _recordingElapsedSeconds =
+            DateTime.now().difference(_recordingStartedAt!).inSeconds;
+      });
     });
+    _syncRecordingAnimations();
+  }
+
+  void _stopRecordingVisuals() {
+    _recordingTimer?.cancel();
+    _recordingTimer = null;
+    _recordingStartedAt = null;
+    _recordingElapsedSeconds = 0;
+    _heartbeatController.stop();
+    _waveController.stop();
+    _heartbeatController.reset();
+    _waveController.reset();
+  }
+
+  void _syncRecordingAnimations() {
+    if (!_isListening || _reduceMotion) {
+      _heartbeatController.stop();
+      _waveController.stop();
+      return;
+    }
+    if (!_heartbeatController.isAnimating) {
+      _heartbeatController.repeat();
+    }
+    if (!_waveController.isAnimating) {
+      _waveController.repeat();
+    }
   }
 
   // ============ LIVE RECORDING ============
@@ -125,15 +158,13 @@ class _RealTimeSpeechScreenState extends State<RealTimeSpeechScreen>
 
         if (status == 'done' || status == 'notListening') {
           if (!mounted) return;
-          setState(() => _isListening = false);
-          _animationController.stop();
+          _setListening(false);
         }
       },
       onError: (error) {
         debugPrint('Speech error: $error');
         if (!mounted) return;
-        setState(() => _isListening = false);
-        _animationController.stop();
+        _setListening(false);
         String errorMsg = error.toString();
         // Handle both error objects and generic events (web compatibility)
         if (errorMsg.contains('network') || errorMsg.contains('no-speech')) {
@@ -155,24 +186,11 @@ class _RealTimeSpeechScreenState extends State<RealTimeSpeechScreen>
       return;
     }
 
-    setState(() {
-      _isListening = true;
-      _recognizedText = '';
-    });
-
-    _animationController.repeat(reverse: true);
+    _setListening(true);
 
     try {
       await _speech.listen(
         onResult: (result) async {
-          debugPrint('WORDS: ${result.recognizedWords}');
-          debugPrint('FINAL: ${result.finalResult}');
-
-          setState(() {
-            _recognizedText = result.recognizedWords;
-            _confidence = result.confidence;
-          });
-
           if (result.finalResult && result.recognizedWords.isNotEmpty) {
             await _translateText(result.recognizedWords);
           }
@@ -184,6 +202,9 @@ class _RealTimeSpeechScreenState extends State<RealTimeSpeechScreen>
           localeId: _getLocaleFromLanguage(_sourceLanguage),
           partialResults: true,
           cancelOnError: true,
+          localeId: _getLocaleFromLanguage(_sourceLanguage),
+          listenFor: const Duration(seconds: 30),
+          pauseFor: const Duration(seconds: 3),
         ),
         onSoundLevelChange: (level) {
           debugPrint('Sound level: $level');
@@ -191,9 +212,10 @@ class _RealTimeSpeechScreenState extends State<RealTimeSpeechScreen>
       );
     } catch (e) {
       debugPrint('Error during speech listen: $e');
-      setState(() => _isListening = false);
-      _animationController.stop();
-      _showSnackBar(context.l10n.couldNotStartListening, Colors.red);
+      _setListening(false);
+      _showSnackBar(
+          'Could not start listening. Please allow microphone access and try again.',
+          Colors.red);
     }
   }
 
@@ -204,15 +226,13 @@ class _RealTimeSpeechScreenState extends State<RealTimeSpeechScreen>
 
         if (status == 'done' || status == 'notListening') {
           if (!mounted) return;
-          setState(() => _isListening = false);
-          _animationController.stop();
+          _setListening(false);
         }
       },
       onError: (message) {
         debugPrint('Web speech error: $message');
         if (!mounted) return;
-        setState(() => _isListening = false);
-        _animationController.stop();
+        _setListening(false);
 
         // Always show the error message to the user
         final errorMsg = message.toLowerCase();
@@ -236,15 +256,8 @@ class _RealTimeSpeechScreenState extends State<RealTimeSpeechScreen>
           _showSnackBar(message, Colors.red);
         }
       },
-      onResult: (words, confidence, isFinal) async {
-        debugPrint('WEB WORDS: $words');
-        debugPrint('WEB FINAL: $isFinal');
+      onResult: (words, _, isFinal) async {
         if (!mounted) return;
-
-        setState(() {
-          _recognizedText = words;
-          _confidence = confidence;
-        });
 
         if (isFinal && words.isNotEmpty) {
           await _translateText(words);
@@ -260,17 +273,12 @@ class _RealTimeSpeechScreenState extends State<RealTimeSpeechScreen>
       return;
     }
 
-    setState(() {
-      _isListening = true;
-      _recognizedText = '';
-    });
+    _setListening(true);
 
     _showSnackBar(
       context.l10n.microphoneReady,
       Colors.green,
     );
-
-    _animationController.repeat(reverse: true);
 
     try {
       await _webSpeechRecognizer.listen(
@@ -279,8 +287,7 @@ class _RealTimeSpeechScreenState extends State<RealTimeSpeechScreen>
     } catch (e) {
       debugPrint('Error during web speech listen: $e');
       if (!mounted) return;
-      setState(() => _isListening = false);
-      _animationController.stop();
+      _setListening(false);
       _showSnackBar(
         context.l10n.couldNotStartListeningWithError(e.toString()),
         Colors.red,
@@ -295,11 +302,136 @@ class _RealTimeSpeechScreenState extends State<RealTimeSpeechScreen>
     } else {
       await _speech.stop();
     }
-    _animationController.stop();
+    _setListening(false);
+  }
 
-    setState(() {
-      _isListening = false;
-    });
+  String _formatRecordingTime() {
+    final seconds = (_recordingElapsedSeconds % 60).toString().padLeft(2, '0');
+    return '00:$seconds';
+  }
+
+  double _heartbeatScale(double progress) {
+    if (progress <= 0.25) {
+      return 1.0 + 0.14 * (progress / 0.25);
+    }
+    if (progress <= 0.50) {
+      return 1.14 - 0.14 * ((progress - 0.25) / 0.25);
+    }
+    if (progress <= 0.72) {
+      return 1.0 + 0.09 * ((progress - 0.50) / 0.22);
+    }
+    if (progress <= 1.0) {
+      return 1.09 - 0.09 * ((progress - 0.72) / 0.28);
+    }
+    return 1.0;
+  }
+
+  Widget _buildIdleButton() {
+    return Container(
+      width: 190,
+      height: 190,
+      decoration: const BoxDecoration(
+        shape: BoxShape.circle,
+        color: Color(0xFFC6E6F8),
+      ),
+      child: Center(
+        child: Container(
+          width: 128,
+          height: 128,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: const Color(0xFF1E96E8),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFF1E96E8).withValues(alpha: 0.25),
+                blurRadius: 16,
+                spreadRadius: 2,
+              ),
+            ],
+          ),
+          child: const Icon(
+            Icons.mic,
+            size: 40,
+            color: Colors.white,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildListeningButton() {
+    return SizedBox(
+      width: 340,
+      height: 340,
+      child: AnimatedBuilder(
+        animation: Listenable.merge([
+          _heartbeatController,
+          _waveController,
+        ]),
+        builder: (context, _) {
+          final heartbeatScale =
+              _reduceMotion ? 1.0 : _heartbeatScale(_heartbeatController.value);
+          final haloProgress =
+              (_heartbeatController.value + (100 / 1200)) % 1.0;
+          final haloScale =
+              _reduceMotion ? 1.0 : _heartbeatScale(haloProgress);
+
+          return Stack(
+            clipBehavior: Clip.none,
+            alignment: Alignment.center,
+            children: [
+              CustomPaint(
+                size: const Size(340, 340),
+                painter: _RecordingWavePainter(
+                  progress: _reduceMotion ? 0.0 : _waveController.value,
+                  reducedMotion: _reduceMotion,
+                ),
+              ),
+              Transform.scale(
+                scale: haloScale,
+                child: Container(
+                  width: 190,
+                  height: 190,
+                  decoration: const BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Color(0xFFC6E6F8),
+                  ),
+                ),
+              ),
+              Transform.scale(
+                scale: heartbeatScale,
+                child: Container(
+                  width: 128,
+                  height: 128,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: const Color(0xFF1E96E8),
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFF1E96E8)
+                            .withValues(alpha: 0.25),
+                        blurRadius: 16,
+                        spreadRadius: 2,
+                      ),
+                    ],
+                  ),
+                  child: Center(
+                    child: Container(
+                      width: 16,
+                      height: 16,
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
   }
 
   // ============ UPLOAD AUDIO FILE ============
@@ -308,31 +440,30 @@ class _RealTimeSpeechScreenState extends State<RealTimeSpeechScreen>
       FilePickerResult? result = await FilePicker.platform.pickFiles(
         type: FileType.custom,
         allowMultiple: false,
-        withData: true, // IMPORTANT
+        withData: true,
         allowedExtensions: ['mp3', 'wav', 'm4a', 'aac', 'ogg'],
       );
 
       if (result != null) {
         setState(() {
           _selectedAudioFile = result.files.single;
-          _fileName = result.files.single.name;
           _isUploading = true;
+          _translationError = null;
         });
 
         _showSnackBar(
-          context.l10n.audioSelected(_fileName ?? ''),
+          '✅ Audio selected: ${result.files.single.name}',
           Colors.green,
         );
 
-        // In a real app, you'd process the audio file here
-        // For demo, we'll simulate transcription
         await _uploadAudioAndTranslate();
-
-        _showSnackBar(context.l10n.audioTranscribed, Colors.green);
       }
     } catch (e) {
-      setState(() => _isUploading = false);
-      _showSnackBar(context.l10n.audioSelectionFailed(e.toString()), Colors.red);
+      setState(() {
+        _isUploading = false;
+        _translationError = 'Error picking audio: $e';
+      });
+      _showSnackBar('Error picking audio: $e', Colors.red);
     }
   }
 
@@ -363,19 +494,19 @@ class _RealTimeSpeechScreenState extends State<RealTimeSpeechScreen>
         throw Exception(context.l10n.emptySpeechTranslationResponse);
       }
       setState(() {
-        _recognizedText = data['original_text']?.toString() ?? '';
         _translatedText = data['translated_text']?.toString() ?? '';
         _isUploading = false;
       });
-
-      await _handleOutput();
 
       _showSnackBar(
         context.l10n.translationCompleted,
         Colors.green,
       );
     } catch (e) {
-      setState(() => _isUploading = false);
+      setState(() {
+        _isUploading = false;
+        _translationError = 'Translation failed: $e';
+      });
 
       _showSnackBar(
         context.l10n.translationFailed(e.toString()),
@@ -388,7 +519,10 @@ class _RealTimeSpeechScreenState extends State<RealTimeSpeechScreen>
   Future<void> _translateText(String text) async {
     if (text.isEmpty) return;
 
-    setState(() => _isTranslating = true);
+    setState(() {
+      _isTranslating = true;
+      _translationError = null;
+    });
 
     try {
       final response =
@@ -396,8 +530,8 @@ class _RealTimeSpeechScreenState extends State<RealTimeSpeechScreen>
         'translate_text/',
         data: {
           'text': text,
-          'source_language': _sourceLanguage,
-          'target_language': _targetLanguage,
+          'source_language': _getLanguageName(_sourceLanguage),
+          'target_language': _getLanguageName(_targetLanguage),
         },
       );
 
@@ -415,40 +549,20 @@ class _RealTimeSpeechScreenState extends State<RealTimeSpeechScreen>
           'translated': _translatedText,
           'sourceLang': _sourceLanguage,
           'targetLang': _targetLanguage,
-          'time': DateTime.now(),
-          'type': 'live',
         });
-
-        await _handleOutput();
       } else {
         throw Exception(context.l10n.translationFailed(''));
       }
     } catch (e) {
-      setState(() => _isTranslating = false);
+      setState(() {
+        _isTranslating = false;
+        _translationError = 'Translation failed: $e';
+      });
 
       _showSnackBar(
         context.l10n.translationFailed(e.toString()),
         Colors.red,
       );
-    }
-  }
-
-  // ============ HANDLE OUTPUT (TEXT/AUDIO/BOTH) ============
-  Future<void> _handleOutput() async {
-    if (_outputAudio && _translatedText.isNotEmpty) {
-      setState(() => _isPlayingAudio = true);
-      await _flutterTts.speak(_translatedText);
-    }
-  }
-
-  // ============ PLAY/STOP AUDIO ============
-  void _toggleAudioPlayback() {
-    if (_isPlayingAudio) {
-      _flutterTts.stop();
-      setState(() => _isPlayingAudio = false);
-    } else if (_translatedText.isNotEmpty) {
-      setState(() => _isPlayingAudio = true);
-      _flutterTts.speak(_translatedText);
     }
   }
 
@@ -461,6 +575,10 @@ class _RealTimeSpeechScreenState extends State<RealTimeSpeechScreen>
         return 'fr_FR';
       case 'rw':
         return 'rw_RW';
+      case 'sw':
+        return 'sw_TZ';
+      case 'zh':
+        return 'zh_CN';
       default:
         return 'en_US';
     }
@@ -473,8 +591,6 @@ class _RealTimeSpeechScreenState extends State<RealTimeSpeechScreen>
       _sourceLanguage = _targetLanguage;
       _targetLanguage = temp;
     });
-
-    _initTTS();
   }
 
   // ============ UI HELPERS ============
@@ -512,18 +628,21 @@ class _RealTimeSpeechScreenState extends State<RealTimeSpeechScreen>
                       label: Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          const Icon(Icons.mic, size: 16),
-                          const SizedBox(width: 4),
-                          Text(context.l10n.recordVoice),
+                          Icon(Icons.mic, size: 16),
+                          SizedBox(width: 4),
+                          Flexible(
+                            child: Text(
+                              'Record Voice',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
                         ],
                       ),
-                      selected: !_isUploading && !_isListening,
+                      selected: _selectedAudioFile == null && !_isListening,
                       onSelected: (selected) {
                         if (selected) {
-                          setState(() {
-                            _selectedAudioFile = null;
-                            _fileName = null;
-                          });
+                          setState(() => _selectedAudioFile = null);
                         }
                       },
                       selectedColor: Colors.white,
@@ -537,9 +656,15 @@ class _RealTimeSpeechScreenState extends State<RealTimeSpeechScreen>
                       label: Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          const Icon(Icons.upload_file, size: 16),
-                          const SizedBox(width: 4),
-                          Text(context.l10n.uploadAudio),
+                          Icon(Icons.upload_file, size: 16),
+                          SizedBox(width: 4),
+                          Flexible(
+                            child: Text(
+                              'Upload Audio',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
                         ],
                       ),
                       selected: _selectedAudioFile != null,
@@ -561,453 +686,155 @@ class _RealTimeSpeechScreenState extends State<RealTimeSpeechScreen>
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Language Selection Card
-              Card(
-                elevation: 2,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: _buildLanguageDropdown(
+                      value: _sourceLanguage,
+                      onChanged: (value) {
+                        if (value != null) {
+                          setState(() => _sourceLanguage = value);
+                        }
+                      },
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.swap_horiz),
+                    onPressed: _swapLanguages,
+                    color: Colors.blue,
+                  ),
+                  Expanded(
+                    child: _buildLanguageDropdown(
+                      value: _targetLanguage,
+                      onChanged: (value) {
+                        if (value != null) {
+                          setState(() => _targetLanguage = value);
+                        }
+                      },
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+
+              // Record Button / Visualization
+              Center(
+                child: Column(
+                  children: [
+                    if (_isListening)
                       Row(
+                        mainAxisSize: MainAxisSize.min,
                         children: [
-                          Expanded(
-                            child: _buildLanguageDropdown(
-                              value: _sourceLanguage,
-                              onChanged: (value) {
-                                setState(() => _sourceLanguage = value!);
-                              },
-                              label: context.l10n.fromLanguage,
+                          Container(
+                            width: 8,
+                            height: 8,
+                            decoration: const BoxDecoration(
+                              color: Colors.red,
+                              shape: BoxShape.circle,
                             ),
                           ),
-                          IconButton(
-                            icon: const Icon(Icons.swap_horiz),
-                            onPressed: _swapLanguages,
-                            color: Colors.blue,
-                          ),
-                          Expanded(
-                            child: _buildLanguageDropdown(
-                              value: _targetLanguage,
-                              onChanged: (value) {
-                                setState(() => _targetLanguage = value!);
-                                _initTTS();
-                              },
-                              label: context.l10n.toLanguage,
+                          const SizedBox(width: 6),
+                          Text(
+                            'Listening\u2026 ${_formatRecordingTime()}',
+                            style: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
                             ),
                           ),
                         ],
-                      ),
-
-                      const SizedBox(height: 16),
-
-                      // Output Options
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: Colors.grey.shade100,
-                          borderRadius: BorderRadius.circular(12),
+                      )
+                    else
+                      const Text(
+                        'Speak',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
                         ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              context.l10n.outputOptions,
-                              style: const TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 14,
+                      ),
+                    const SizedBox(height: 6),
+                    GestureDetector(
+                      onTap: _isListening ? _stopListening : _startListening,
+                      child: _isListening
+                          ? _buildListeningButton()
+                          : _buildIdleButton(),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      _isListening ? 'Tap to stop' : 'Tap and speak',
+                      style: const TextStyle(fontSize: 12, color: Colors.grey),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 18),
+
+              const Text(
+                'Translation',
+                style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 6),
+              ConstrainedBox(
+                constraints: const BoxConstraints(minHeight: 190),
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(
+                    vertical: 18,
+                    horizontal: 20,
+                  ),
+                  decoration: BoxDecoration(
+                    border: Border.all(
+                      color: const Color(0xFF1B6B3A),
+                      width: 2,
+                    ),
+                    borderRadius: BorderRadius.circular(14),
+                    color: const Color(0xFFE8F5EE),
+                  ),
+                  child: Align(
+                    alignment: Alignment.topLeft,
+                    child: _isTranslating || _isUploading
+                        ? const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Color(0xFF1B6B3A),
+                                ),
                               ),
-                            ),
-                            const SizedBox(height: 8),
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: FilterChip(
-                                    label: Text(context.l10n.textOutput),
-                                    selected: _outputText,
-                                    onSelected: (value) {
-                                      setState(() => _outputText = value);
-                                    },
-                                    backgroundColor: Colors.grey.shade200,
-                                    selectedColor: Colors.blue.shade100,
-                                  ),
+                              SizedBox(width: 12),
+                              Text(
+                                'Translating...',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  color: Color(0xFF17382A),
                                 ),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  child: FilterChip(
-                                    label: Text(context.l10n.audioOutput),
-                                    selected: _outputAudio,
-                                    onSelected: (value) {
-                                      setState(() => _outputAudio = value);
-                                    },
-                                    backgroundColor: Colors.grey.shade200,
-                                    selectedColor: Colors.blue.shade100,
-                                  ),
+                              ),
+                            ],
+                          )
+                        : _translationError != null
+                            ? Text(
+                                _translationError!,
+                                style: const TextStyle(
+                                  fontSize: 16,
+                                  color: Colors.red,
+                                  height: 1.35,
                                 ),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  child: FilterChip(
-                                    label: Text(context.l10n.bothOutputs),
-                                    selected: _outputText && _outputAudio,
-                                    onSelected: (value) {
-                                      setState(() {
-                                        _outputText = value;
-                                        _outputAudio = value;
-                                      });
-                                    },
-                                    backgroundColor: Colors.grey.shade200,
-                                    selectedColor: Colors.green.shade100,
-                                  ),
+                              )
+                            : Text(
+                                _translatedText.isEmpty
+                                    ? 'Translation will appear here'
+                                    : _translatedText,
+                                style: const TextStyle(
+                                  fontSize: 22,
+                                  height: 1.35,
+                                  color: Color(0xFF17382A),
                                 ),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
+                              ),
                   ),
                 ),
               ),
-
-              const SizedBox(height: 16),
-
-              // Recording/Upload Status
-              if (_isUploading)
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Colors.blue.shade50,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.blue.shade200),
-                  ),
-                  child: Row(
-                    children: [
-                      const SizedBox(
-                        width: 24,
-                        height: 24,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              context.l10n.processingAudio,
-                              style: const TextStyle(
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            Text(
-                              _fileName ?? context.l10n.convertingSpeechToText,
-                              style: const TextStyle(color: Colors.grey),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-
-              if (_fileName != null && !_isUploading)
-                Container(
-                  margin: const EdgeInsets.only(bottom: 16),
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.green.shade50,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.green.shade200),
-                  ),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.audio_file, color: Colors.green),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          _fileName!,
-                          style: const TextStyle(fontWeight: FontWeight.w500),
-                        ),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.close, size: 18),
-                        onPressed: () {
-                          setState(() {
-                            _selectedAudioFile = null;
-                            _fileName = null;
-                          });
-                        },
-                      ),
-                    ],
-                  ),
-                ),
-
-              // Record Button / Visualization
-              if (_selectedAudioFile == null)
-                Center(
-                  child: Column(
-                    children: [
-                      AnimatedBuilder(
-                        animation: _animationController,
-                        builder: (context, child) {
-                          return GestureDetector(
-                            onTap:
-                                _isListening ? _stopListening : _startListening,
-                            child: Container(
-                              width: 200 +
-                                  (_isListening
-                                      ? (_animationController.value * 50)
-                                      : 0),
-                              height: 200 +
-                                  (_isListening
-                                      ? (_animationController.value * 50)
-                                      : 0),
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                color: _isListening
-                                    ? Colors.red.withValues(alpha: 0.3 -
-                                        (_animationController.value * 0.1))
-                                    : Colors.blue.withValues(alpha: 0.1),
-                              ),
-                              child: Center(
-                                child: Container(
-                                  width: 150,
-                                  height: 150,
-                                  decoration: BoxDecoration(
-                                    shape: BoxShape.circle,
-                                    color:
-                                        _isListening ? Colors.red : Colors.blue,
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: (_isListening
-                                                ? Colors.red
-                                                : Colors.blue)
-                                            .withValues(alpha: 0.3),
-                                        blurRadius: 20,
-                                        spreadRadius: 5,
-                                      ),
-                                    ],
-                                  ),
-                                  child: Icon(
-                                    _isListening ? Icons.stop : Icons.mic,
-                                    size: 80,
-                                    color: Colors.white,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          );
-                        },
-                      ),
-                      const SizedBox(height: 24),
-                      if (_isListening) ...[
-                        Text(
-                          context.l10n.listening,
-                          style: const TextStyle(
-                            fontSize: 20,
-                            color: Colors.red,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          context.l10n.confidence(
-                            (_confidence * 100).toStringAsFixed(0),
-                          ),
-                          style: const TextStyle(color: Colors.grey),
-                        ),
-                      ] else if (_recognizedText.isEmpty) ...[
-                        Text(
-                          context.l10n.tapToStartRecording,
-                          style: const TextStyle(
-                            fontSize: 16,
-                            color: Colors.grey,
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-
-              const SizedBox(height: 24),
-
-              // Results
-              if (_recognizedText.isNotEmpty)
-                Card(
-                  elevation: 2,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.all(8),
-                              decoration: BoxDecoration(
-                                color: Colors.blue.shade50,
-                                shape: BoxShape.circle,
-                              ),
-                              child: const Icon(Icons.mic,
-                                  color: Colors.blue, size: 20),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    context.l10n.recognizedSpeech,
-                                    style: const TextStyle(
-                                      fontSize: 12,
-                                      color: Colors.grey,
-                                    ),
-                                  ),
-                                  Text(
-                                    _getLanguageName(_sourceLanguage),
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            if (_isTranslating)
-                              const SizedBox(
-                                width: 20,
-                                height: 20,
-                                child:
-                                    CircularProgressIndicator(strokeWidth: 2),
-                              ),
-                          ],
-                        ),
-                        const SizedBox(height: 12),
-                        Text(
-                          _recognizedText,
-                          style: const TextStyle(fontSize: 16, height: 1.5),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-
-              const SizedBox(height: 12),
-
-              if (_translatedText.isNotEmpty)
-                Card(
-                  elevation: 2,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  color: Colors.blue.shade50,
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.all(8),
-                              decoration: const BoxDecoration(
-                                color: Colors.white,
-                                shape: BoxShape.circle,
-                              ),
-                              child: const Icon(Icons.translate,
-                                  color: Colors.blue, size: 20),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    context.l10n.translation,
-                                    style: const TextStyle(
-                                      fontSize: 12,
-                                      color: Colors.grey,
-                                    ),
-                                  ),
-                                  Text(
-                                    _getLanguageName(_targetLanguage),
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            if (_outputAudio)
-                              IconButton(
-                                icon: Icon(
-                                  _isPlayingAudio
-                                      ? Icons.stop
-                                      : Icons.volume_up,
-                                  color: Colors.blue,
-                                ),
-                                onPressed: _toggleAudioPlayback,
-                              ),
-                          ],
-                        ),
-                        const SizedBox(height: 12),
-                        Text(
-                          _translatedText,
-                          style: const TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w500,
-                            height: 1.5,
-                          ),
-                        ),
-
-                        const SizedBox(height: 16),
-
-                        // Action Buttons
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.end,
-                          children: [
-                            IconButton(
-                              icon: const Icon(Icons.copy),
-                              onPressed: () async {
-                                await Clipboard.setData(
-                                    ClipboardData(text: _translatedText));
-                                _showSnackBar(
-                                  context.l10n.copiedToClipboard,
-                                  Colors.green,
-                                );
-                              },
-                              color: Colors.blue,
-                            ),
-                            IconButton(
-                              icon: const Icon(Icons.favorite_border),
-                              onPressed: () {
-                                // Save to favorites
-                                _showSnackBar(
-                                  context.l10n.savedToFavorites,
-                                  Colors.pink,
-                                );
-                              },
-                              color: Colors.blue,
-                            ),
-                            IconButton(
-                              icon: const Icon(Icons.share),
-                              onPressed: () {
-                                // Share
-                                _showSnackBar(
-                                  context.l10n.shareComingSoon,
-                                  Colors.orange,
-                                );
-                              },
-                              color: Colors.blue,
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
 
               const SizedBox(height: 24),
 
@@ -1099,7 +926,6 @@ class _RealTimeSpeechScreenState extends State<RealTimeSpeechScreen>
   Widget _buildLanguageDropdown({
     required String value,
     required Function(String?) onChanged,
-    required String label,
   }) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -1112,26 +938,15 @@ class _RealTimeSpeechScreenState extends State<RealTimeSpeechScreen>
           value: value,
           isExpanded: true,
           icon: const Icon(Icons.arrow_drop_down),
-          items: [
-            ...Languages.africanLanguages.map((lang) {
-              return DropdownMenuItem(
-                value: lang.code,
-                child: Text(
-                  '${lang.flagEmoji} ${lang.nativeName}',
-                  overflow: TextOverflow.ellipsis,
-                ),
-              );
-            }),
-            ...Languages.globalLanguages.map((lang) {
-              return DropdownMenuItem(
-                value: lang.code,
-                child: Text(
-                  '${lang.flagEmoji} ${lang.nativeName}',
-                  overflow: TextOverflow.ellipsis,
-                ),
-              );
-            }),
-          ],
+          items: Languages.translationLanguages.map((lang) {
+            return DropdownMenuItem(
+              value: lang.code,
+              child: Text(
+                '${lang.flagEmoji} ${lang.name}',
+                overflow: TextOverflow.ellipsis,
+              ),
+            );
+          }).toList(),
           onChanged: onChanged,
         ),
       ),
@@ -1139,12 +954,47 @@ class _RealTimeSpeechScreenState extends State<RealTimeSpeechScreen>
   }
 
   String _getLanguageName(String code) {
-    for (var lang in Languages.africanLanguages) {
-      if (lang.code == code) return lang.nativeName;
-    }
-    for (var lang in Languages.globalLanguages) {
+    for (final lang in Languages.translationLanguages) {
       if (lang.code == code) return lang.name;
     }
     return code;
+  }
+}
+
+class _RecordingWavePainter extends CustomPainter {
+  const _RecordingWavePainter({
+    required this.progress,
+    required this.reducedMotion,
+  });
+
+  final double progress;
+  final bool reducedMotion;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (reducedMotion) return;
+
+    const baseDiameter = 128.0;
+    const maxDiameter = baseDiameter * 2.6;
+    final center = Offset(size.width / 2, size.height / 2);
+
+    for (var ring = 0; ring < 3; ring++) {
+      var ringProgress = progress - (ring * 0.333333);
+      if (ringProgress < 0) ringProgress += 1.0;
+      final diameter =
+          baseDiameter + (maxDiameter - baseDiameter) * ringProgress;
+      final opacity = 0.55 * (1.0 - ringProgress);
+      final paint = Paint()
+        ..color = const Color(0xFF1E96E8).withValues(alpha: opacity)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2;
+      canvas.drawCircle(center, diameter / 2, paint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(_RecordingWavePainter oldDelegate) {
+    return oldDelegate.progress != progress ||
+        oldDelegate.reducedMotion != reducedMotion;
   }
 }

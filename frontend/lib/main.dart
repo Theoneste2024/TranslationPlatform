@@ -9,17 +9,13 @@ import 'l10n/generated/app_localizations.dart';
 import 'l10n/app_localizations_extensions.dart';
 import 'providers/auth_provider.dart';
 import 'providers/offline_provider.dart';
-import 'screens/education/lecture_summarizer_screen.dart';
+import 'screens/adverts/adverts_screen.dart';
 import 'screens/auth/auth_screen.dart';
 import 'screens/home/home_screen.dart';
 import 'screens/maps/google_maps_screen.dart';
 import 'screens/settings/settings_screen.dart';
-import 'screens/translation/camera_translation_screen.dart';
-import 'screens/translation/motorist_mode_screen.dart';
-import 'screens/translation/offline_packs_screen.dart';
 import 'screens/translation/real_time_speech_screen.dart';
 import 'screens/translation/text_translation_screen.dart';
-import 'screens/translation/video_translation_screen.dart';
 import 'widgets/app_sidebar.dart';
 
 void main() {
@@ -98,6 +94,19 @@ class MyApp extends StatelessWidget {
         },
         home: const _AppHome(),
       ),
+      builder: (context, child) => AnnotatedRegion<SystemUiOverlayStyle>(
+        value: appSystemUiOverlayStyle,
+        child: child ?? const SizedBox.shrink(),
+      ),
+      routes: {
+        AppRoutes.home: (_) => const HomeScreen(),
+        AppRoutes.textTranslation: (_) => const TextTranslationScreen(),
+        AppRoutes.speechTranslation: (_) => const RealTimeSpeechScreen(),
+        AppRoutes.adverts: (_) => const AdvertsScreen(),
+        AppRoutes.maps: (_) => const GoogleMapsScreen(),
+        AppRoutes.settings: (_) => const SettingsScreen(),
+      },
+      home: const _AppHome(),
     );
   }
 }

@@ -110,12 +110,13 @@ class _AuthScreenState extends State<AuthScreen> {
         children: [
           LayoutBuilder(
             builder: (context, constraints) {
-              if (constraints.maxWidth <= 36 || constraints.maxHeight <= 0) {
+              if (constraints.maxWidth <= 0 || constraints.maxHeight <= 0) {
                 return const SizedBox.shrink();
               }
 
               final isMobile = constraints.maxWidth < 600;
-              final cardWidth = math.min(constraints.maxWidth - 36, 400.0);
+              final cardWidth =
+                  math.max(0.0, math.min(constraints.maxWidth - 36, 400.0));
 
               return Theme(
                 data: Theme.of(context).copyWith(

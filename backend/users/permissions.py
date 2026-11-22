@@ -144,8 +144,6 @@ class CanSpeechTranslate(CapabilityPermission):
     name = 'CanSpeechTranslate'
 
 
-class CanAnalyzeVideo(CapabilityPermission):
-    name = 'CanAnalyzeVideo'
 
 
 def _with_cors(response: HttpResponse) -> HttpResponse:

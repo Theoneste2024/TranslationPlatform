@@ -14,16 +14,46 @@ from rest_framework.views import APIView
 from users.permissions import BearerTokenAuthentication
 
 from . import video_service
-from .models import Translation
+from .speech_service import SpeechGenerationError, generate_translation_audio
+from .models import Advert, Translation
 from .serializers import (
+    AdvertSerializer ,
     Base64AudioSerializer,
     SpeechTranslationSerializer,
+    TranslationSpeechSerializer,
     TextTranslationSerializer,
     VideoAnalysisSerializer,
 )
 
 
 logger = logging.getLogger(__name__)
+KINYARWANDA_TRANSLATION_GUIDANCE = """You are an expert in natural, fluent, and authentic Rwandan Kinyarwanda.
+
+Your task is to communicate and translate information into Kinyarwanda exactly as a native Rwandan speaker would naturally speak in everyday conversations.
+
+Follow these instructions strictly:
+1. Always use natural, fluent, and grammatically correct Rwandan Kinyarwanda.
+2. Use everyday words, expressions, phrases, and sentence structures commonly used by people in Rwanda.
+3. Never translate word for word from English, French, or any other language. Translate the meaning, context, and intention instead.
+4. Avoid robotic, artificial, complicated, or textbook-style Kinyarwanda.
+5. Make your translations sound like a real Rwandan person speaking naturally to another Rwandan.
+6. Understand the context before translating. Pay attention to greetings, emotions, jokes, questions, cultural expressions, and informal conversations.
+7. Use correct Kinyarwanda grammar, vocabulary, spelling, pronunciation-friendly wording, and natural sentence flow.
+8. When translating spoken conversations, prioritize the way Rwandans actually talk rather than formal written language.
+9. Do not invent words or expressions. If you are uncertain about the meaning, ask for clarification.
+10. Preserve the original message without adding, removing, or changing its meaning.
+11. Respond only in the requested target language unless another language is explicitly requested.
+12. Before providing any translation, check whether a native Rwandan speaker would naturally say the sentence that way. If not, rewrite it.
+13. When speaking Kinyarwanda, pronounce the letter C/c as /tʃ/, never as /k/. Follow these pronunciation rules:
+       ca → /tʃa/
+       ci → /tʃi/
+       cu → /tʃu/
+       ce → /tʃe/
+       co → /tʃo/
+
+14. keep the /w/ sound clear in words like Cyangwa, do not change it to an 'l' sound.
+IMPORTANT:
+Your goal is not simply to translate English into Kinyarwanda. Your goal is to produce authentic, natural, fluent Rwandan Kinyarwanda that sounds like it comes from a native speaker in Rwanda."""
 SUPPORTED_AUDIO_FORMATS = {
     ".mp3",
     ".mp4",
@@ -119,6 +149,101 @@ def _save_streamed_video_result(record, segments, status, error_message=""):
     )
 
 
+class AdvertListView(APIView):
+    authentication_classes = [BearerTokenAuthentication]
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        adverts = Advert.objects.filter(is_active=True)
+        serializer = AdvertSerializer(adverts, many=True, context={'request': request})
+        return Response(serializer.data)
+
+    def post(self, request):
+        if not request.user or not request.user.is_authenticated:
+            return Response(
+                {'error': 'Authentication required.'},
+                status=status.HTTP_401_UNAUTHORIZED,
+            )
+
+        serializer = AdvertSerializer(
+            data=request.data,
+            context={'request': request},
+        )
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        advert = serializer.save(created_by=request.user)
+        return Response(
+            AdvertSerializer(advert, context={'request': request}).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class AdvertDetailView(APIView):
+    authentication_classes = [BearerTokenAuthentication]
+    permission_classes = [AllowAny]
+
+    def get_object(self, request, advert_id):
+        try:
+            return Advert.objects.get(pk=advert_id)
+        except Advert.DoesNotExist:
+            return None
+
+    def get(self, request, advert_id):
+        advert = self.get_object(request, advert_id)
+        if advert is None or not advert.is_active:
+            return Response(
+                {'error': 'Advert not found.'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        serializer = AdvertSerializer(advert, context={'request': request})
+        return Response(serializer.data)
+
+    def patch(self, request, advert_id):
+        advert = self.get_object(request, advert_id)
+        if advert is None:
+            return Response(
+                {'error': 'Advert not found.'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        if not request.user.is_authenticated or (
+            advert.created_by_id != request.user.id
+            and not request.user.is_superuser
+        ):
+            return Response(
+                {'error': 'Permission denied.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        serializer = AdvertSerializer(
+            advert,
+            data=request.data,
+            partial=True,
+            context={'request': request},
+        )
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        advert = serializer.save()
+        return Response(AdvertSerializer(advert, context={'request': request}).data)
+
+    def delete(self, request, advert_id):
+        advert = self.get_object(request, advert_id)
+        if advert is None:
+            return Response(
+                {'error': 'Advert not found.'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        if not request.user.is_authenticated or (
+            advert.created_by_id != request.user.id
+            and not request.user.is_superuser
+        ):
+            return Response(
+                {'error': 'Permission denied.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        advert.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
 class HealthView(APIView):
     permission_classes = [AllowAny]
 
@@ -136,6 +261,11 @@ class TranslateTextView(APIView):
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
         data = serializer.validated_data
+        kinyarwanda_guidance = (
+            f"\n\n{KINYARWANDA_TRANSLATION_GUIDANCE}\n"
+            if data["target_language"].strip().casefold() == "kinyarwanda"
+            else ""
+        )
         prompt = f"""
 Translate the following text from {data['source_language']} to {data['target_language']}.
 
@@ -146,6 +276,7 @@ Translate the following text from {data['source_language']} to {data['target_lan
 - For Kinyarwanda, use proper fluent Kinyarwanda
 - Do not add quotes.
 - Do not say 'translation is'.
+{kinyarwanda_guidance}
 
 Text:
 {data['text']}
@@ -154,7 +285,7 @@ Text:
         try:
             client = OpenAI()
             completion = client.chat.completions.create(
-                model="gpt-5.4-mini",
+                model="gpt-6.2-sol",
                 messages=[
                     {"role": "system", "content": "You are a professional translator."},
                     {"role": "user", "content": prompt},
@@ -172,6 +303,44 @@ Text:
             translated_text=translated_text,
         )
         return Response({"translated_text": translated_text})
+
+
+class TranslateTextSpeechView(APIView):
+    authentication_classes = [BearerTokenAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        serializer = TranslationSpeechSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        data = serializer.validated_data
+        target_language = data["target_language"].strip()
+        kinyarwanda_guidance = (
+            KINYARWANDA_TRANSLATION_GUIDANCE
+            if target_language.casefold() == "kinyarwanda"
+            else ""
+        )
+
+        try:
+            audio = generate_translation_audio(
+                data["text"],
+                target_language,
+                kinyarwanda_guidance,
+            )
+        except SpeechGenerationError:
+            logger.exception("Text translation speech generation failed")
+            return Response(
+                {"error": "Speech generation failed."},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+
+        return Response(
+            {
+                "audio_base64": base64.b64encode(audio).decode("ascii"),
+                "audio_mime_type": "audio/mpeg",
+            }
+        )
 
 
 class SpeechTranslateView(APIView):
@@ -244,7 +413,7 @@ class SpeechTranslateView(APIView):
                 )
             original_text = transcription.text
             completion = client.chat.completions.create(
-                model="gpt-4.1",
+                model="gpt-6.2-sol",
                 messages=[
                     {"role": "system", "content": "You are a professional translator."},
                     {
@@ -259,6 +428,7 @@ Translate the following text from {languages['source_language']} to {languages['
 - For Kinyarwanda, use proper fluent Kinyarwanda
 - Do not add quotes.
 - Do not say 'translation is'.
+- try to speak Kinyarwanda in a way that is natural, and fluent, avoiding overly formal or literal translations.
 
 Text:
 {original_text}

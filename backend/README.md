@@ -30,6 +30,7 @@ before running `python manage.py test`.
 
 - `GET /api/v1/health/`
 - `POST /api/v1/translate_text/`
+- `POST /api/v1/translate_text/speech/`
 - `POST /api/v1/speech_translate/`
 - `POST /api/v1/analyze_video/`
 - `POST /api/v1/auth/register/`
@@ -42,6 +43,12 @@ before running `python manage.py test`.
 - `GET /api/v1/auth/me/` (JWT required)
 
 The translation routes preserve the existing request and response formats.
+Text Translation speech is generated on demand by
+`POST /api/v1/translate_text/speech/`, which accepts translated `text` and
+`target_language` and returns base64-encoded MP3 audio. It uses the
+`gpt-4o-mini-tts` model and the server-side `OPENAI_API_KEY`. OpenAI currently
+plans to retire this model on January 6, 2027, so the speech provider will need
+to be migrated before then.
 Registration requires `email`, `username`, `phone_number`, `gender`, `password`,
 and `confirm_password`. Gender values are `male`, `female`, `other`, and
 `prefer_not_to_say`. Registration sends an email verification link and does not
@@ -50,9 +57,12 @@ containing either an email or an E.164 phone number plus `password`, and issues
 JWTs directly after successful authentication. Password reset links are sent
 by email.
 
-The app label is now `users`. Its migration keeps the existing `accounts_user`
-table and password hashes while migrating account fields, so deploy it with
-`python manage.py migrate` rather than deleting the old database.
+The current user model uses the `users_user` table. The initial migrations
+create this table and the translation tables for a fresh database; they do not
+reuse the legacy `accounts_user` table. This migration history is intended for
+a fresh local database. Back up any database you need to keep before resetting
+it, and use a separate data migration if legacy account records must be
+preserved.
 
 Set `DJANGO_DEBUG=false`, `DJANGO_SECRET_KEY`, `DJANGO_ALLOWED_HOSTS`, and
 `CORS_ALLOWED_ORIGINS` in production. Keep database and API credentials in

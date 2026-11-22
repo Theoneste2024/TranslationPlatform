@@ -7,13 +7,9 @@ import '../../providers/auth_provider.dart';
 import '../../widgets/app_header.dart';
 import '../translation/text_translation_screen.dart';
 import '../translation/real_time_speech_screen.dart';
-import '../translation/video_translation_screen.dart';
-import '../translation/camera_translation_screen.dart';
-import '../translation/offline_packs_screen.dart';
-import '../education/lecture_summarizer_screen.dart';
-import '../translation/motorist_mode_screen.dart';
 import '../maps/google_maps_screen.dart';
 import '../settings/settings_screen.dart';
+import '../adverts/adverts_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -69,7 +65,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       const Positioned(
                         top: 18,
                         right: 8,
-                        child: AppLanguageSelector(),
+                        child: AppBrandControls(),
                       ),
                       Center(
                         child: Transform.translate(
@@ -83,13 +79,20 @@ class _HomeScreenState extends State<HomeScreen> {
                               mainAxisSize: MainAxisSize.min,
                               children: [
                                 const SizedBox(
-                                  width: 90,
-                                  height: 90,
-                                  child: Center(
-                                    child: Icon(
-                                      Icons.translate,
-                                      color: Colors.white,
-                                      size: 80,
+                                  width: 120,
+                                  height: 120,
+                                  child: ClipRect(
+                                    child: OverflowBox(
+                                      minWidth: 170,
+                                      maxWidth: 170,
+                                      minHeight: 170,
+                                      maxHeight: 170,
+                                      child: Image(
+                                        image: AssetImage(
+                                          'assets/images/logo.png',
+                                        ),
+                                        fit: BoxFit.cover,
+                                      ),
                                     ),
                                   ),
                                 ),
@@ -217,34 +220,9 @@ class _HomeScreenState extends State<HomeScreen> {
               onTap: () => _navigateTo(const RealTimeSpeechScreen()),
             ),
             _buildDrawerItem(
-              icon: Icons.video_library,
-              title: context.l10n.videoTranslation,
-              onTap: () => _navigateTo(const VideoTranslationScreen()),
-            ),
-            _buildDrawerItem(
-              icon: Icons.camera_alt,
-              title: context.l10n.cameraTranslation,
-              onTap: () => _navigateTo(const CameraTranslationScreen()),
-            ),
-
-            // Education & Utilities (Under Development)
-            _buildDrawerItem(
-              icon: Icons.school,
-              title: context.l10n.educationTools,
-              subtitle: context.l10n.underDevelopment,
-              onTap: () => _navigateTo(const LectureSummarizerScreen()),
-            ),
-            _buildDrawerItem(
-              icon: Icons.offline_bolt,
-              title: context.l10n.offlinePacks,
-              subtitle: context.l10n.underDevelopment,
-              onTap: () => _navigateTo(const OfflinePacksScreen()),
-            ),
-            _buildDrawerItem(
-              icon: Icons.motorcycle,
-              title: context.l10n.driverMode,
-              subtitle: context.l10n.underDevelopment,
-              onTap: () => _navigateTo(const MotoristModeScreen()),
+              icon: Icons.campaign,
+              title: 'Adverts',
+              onTap: () => _navigateTo(const AdvertsScreen()),
             ),
 
             // Maps & Navigation
@@ -297,13 +275,22 @@ class _HomeScreenState extends State<HomeScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisAlignment: MainAxisAlignment.end,
           children: [
-            const Text(
-              'MPUZA',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 24,
-                fontWeight: FontWeight.w900,
-              ),
+            const Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                AppBrandLogo(
+                  assetPath: 'assets/images/logo.png',
+                ),
+                SizedBox(width: 8),
+                Text(
+                  'MPUZA',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 24,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ],
             ),
             const SizedBox(height: 8),
             Text(

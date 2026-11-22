@@ -42,3 +42,25 @@ class Translation(models.Model):
 
     def __str__(self) -> str:
         return f'{self.get_kind_display()} translation #{self.pk} ({self.status})'
+
+
+class Advert(models.Model):
+    title = models.CharField(max_length=200)
+    description = models.TextField(blank=True)
+    image = models.FileField(upload_to='adverts/')
+    link_url = models.URLField(blank=True)
+    is_active = models.BooleanField(default=True, db_index=True)
+    created_by = models.ForeignKey(
+        'users.User',
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name='adverts',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering: ClassVar[list[str]] = ['-created_at']
+
+    def __str__(self) -> str:
+        return self.title

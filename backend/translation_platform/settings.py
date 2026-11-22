@@ -30,10 +30,10 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
 ]
 
-ROOT_URLCONF = 'Translation_Platform.urls'
+ROOT_URLCONF = 'translation_platform.urls'
 TEMPLATES = []
-WSGI_APPLICATION = 'Translation_Platform.wsgi.application'
-ASGI_APPLICATION = 'Translation_Platform.asgi.application'
+WSGI_APPLICATION = 'translation_platform.wsgi.application'
+ASGI_APPLICATION = 'translation_platform.asgi.application'
 
 DATABASES = {
     'default': {
@@ -74,3 +74,5 @@ OTP_EXPIRY_SECONDS = int(os.environ.get('OTP_EXPIRY_SECONDS', '600'))
 OTP_MAX_ATTEMPTS = int(os.environ.get('OTP_MAX_ATTEMPTS', '5'))
 OTP_RESEND_COOLDOWN_SECONDS = int(os.environ.get('OTP_RESEND_COOLDOWN_SECONDS', '60'))
 API_TOKEN_TTL_SECONDS = int(os.environ.get('API_TOKEN_TTL_SECONDS', '3600'))
+MEDIA_URL = '/media/'
+MEDIA_ROOT = BASE_DIR / 'media'

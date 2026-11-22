@@ -293,7 +293,6 @@ class UserAuthenticationTests(TestCase):
         endpoints = (
             '/api/v1/translate_text/',
             '/api/v1/speech_translate/',
-            '/api/v1/analyze_video/',
         )
 
         for endpoint in endpoints:
