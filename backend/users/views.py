@@ -23,6 +23,7 @@ from .models import EmailOTP, Role, User
 from .permissions import (
     BearerTokenAuthentication,
     CanAddUser,
+    CanChangeSystemLanguage,
     CanLogin,
     CanRequestPasswordReset,
     CanResendVerification,
@@ -31,6 +32,7 @@ from .permissions import (
     CanViewUserProfile,
     issue_access_token,
 )
+from .serializers import SystemLanguagePreferenceSerializer
 
 logger = logging.getLogger(__name__)
 
@@ -183,7 +185,7 @@ class UsersAPIView(generics.GenericAPIView):
     def finalize_response(self, request, response, *args, **kwargs):
         response = super().finalize_response(request, response, *args, **kwargs)
         response['Access-Control-Allow-Origin'] = '*'
-        response['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS'
+        response['Access-Control-Allow-Methods'] = 'GET, POST, PATCH, OPTIONS'
         response['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
         return response
 
@@ -424,6 +426,7 @@ class LoginView(UsersAPIView):
                     'phone_number': user.phone_number,
                     'country': user.country,
                     'gender': user.gender,
+                    'system_language': user.system_language,
                     'role': user.role.name,
                 },
             }
@@ -535,6 +538,30 @@ class ProfileView(UsersAPIView):
                 'phone_number': user.phone_number,
                 'country': user.country,
                 'gender': user.gender,
+                'system_language': user.system_language,
                 'role': user.role.name,
             }
         )
+
+
+class SystemLanguageView(UsersAPIView):
+    permission_classes: ClassVar[list[type[BasePermission]]] = [
+        CanChangeSystemLanguage
+    ]
+
+    def get(self, request: Request) -> Response:
+        return Response({'system_language': request.user.system_language})
+
+    def patch(self, request: Request) -> Response:
+        data = self.get_payload(request)
+        if isinstance(data, Response):
+            return data
+
+        serializer = SystemLanguagePreferenceSerializer(data=data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        user = request.user
+        user.system_language = serializer.validated_data['system_language']
+        user.save(update_fields=['system_language'])
+        return Response({'system_language': user.system_language})

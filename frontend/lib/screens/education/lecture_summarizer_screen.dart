@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+
+import '../../l10n/app_localizations_extensions.dart';
 import '../../widgets/app_header.dart';
 import '../../widgets/app_sidebar.dart';
 
@@ -10,7 +12,7 @@ class LectureSummarizerScreen extends StatelessWidget {
     return AppPageShell(
       child: Scaffold(
         appBar: AppBar(
-          title: const Text('Education Tools'),
+          title: Text(context.l10n.educationTools),
           elevation: 0,
           leading: const AppMenuButton(),
           automaticallyImplyLeading: false,
@@ -28,36 +30,36 @@ class LectureSummarizerScreen extends StatelessWidget {
                   color: Colors.indigo,
                 ),
                 const SizedBox(height: 20),
-                const Text(
-                  'Lecture Summarizer',
-                  style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+                Text(
+                  context.l10n.lectureSummarizer,
+                  style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 10),
-                const Text(
-                  'Coming Soon!',
-                  style: TextStyle(fontSize: 18, color: Colors.grey),
+                Text(
+                  context.l10n.comingSoon,
+                  style: const TextStyle(fontSize: 18, color: Colors.grey),
                 ),
                 const SizedBox(height: 40),
-                const Text(
-                  '• Auto-summarization of lectures',
-                  style: TextStyle(fontSize: 16),
+                Text(
+                  '• ${context.l10n.autoSummarizeLectures}',
+                  style: const TextStyle(fontSize: 16),
                 ),
                 const SizedBox(height: 8),
-                const Text(
-                  '• Study notes generation',
-                  style: TextStyle(fontSize: 16),
+                Text(
+                  '• ${context.l10n.studyNotesGeneration}',
+                  style: const TextStyle(fontSize: 16),
                 ),
                 const SizedBox(height: 8),
-                const Text(
-                  '• Vocabulary extraction',
-                  style: TextStyle(fontSize: 16),
+                Text(
+                  '• ${context.l10n.vocabularyExtraction}',
+                  style: const TextStyle(fontSize: 16),
                 ),
                 const SizedBox(height: 40),
                 ElevatedButton(
                   onPressed: () {
                     Navigator.pop(context);
                   },
-                  child: const Text('Back to Home'),
+                  child: Text(context.l10n.backToHome),
                 ),
               ],
             ),

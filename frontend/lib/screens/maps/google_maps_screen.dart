@@ -1,5 +1,7 @@
 import 'dart:async';
 import 'dart:math';
+// ignore_for_file: use_build_context_synchronously
+
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart' as ll;
@@ -8,6 +10,7 @@ import 'package:flutter_map_location_marker/flutter_map_location_marker.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:flutter_nominatim/flutter_nominatim.dart';
+import '../../l10n/app_localizations_extensions.dart';
 import '../../widgets/app_sidebar.dart';
 import '../../widgets/app_header.dart';
 
@@ -267,7 +270,7 @@ class _GoogleMapsScreenState extends State<GoogleMapsScreen> {
     try {
       bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
       if (!serviceEnabled) {
-        _showSnackBar('Please enable location services', Colors.orange);
+        _showSnackBar(context.l10n.enableLocationServices, Colors.orange);
         _setDefaultLocation();
         return;
       }
@@ -276,14 +279,17 @@ class _GoogleMapsScreenState extends State<GoogleMapsScreen> {
       if (permission == LocationPermission.denied) {
         permission = await Geolocator.requestPermission();
         if (permission == LocationPermission.denied) {
-          _showSnackBar('Location permission denied', Colors.red);
+          _showSnackBar(context.l10n.locationPermissionDenied, Colors.red);
           _setDefaultLocation();
           return;
         }
       }
 
       if (permission == LocationPermission.deniedForever) {
-        _showSnackBar('Location permissions permanently denied', Colors.red);
+        _showSnackBar(
+          context.l10n.locationPermissionPermanentlyDenied,
+          Colors.red,
+        );
         _setDefaultLocation();
         return;
       }
@@ -299,9 +305,9 @@ class _GoogleMapsScreenState extends State<GoogleMapsScreen> {
 
       _mapController.move(_currentPosition!, _currentZoom);
       _updateCurrentLocationMarker();
-      _showSnackBar('📍 Live location active!', Colors.green);
+      _showSnackBar(context.l10n.liveLocationActive, Colors.green);
     } catch (e) {
-      print('Location error: $e');
+      debugPrint('Location error: $e');
       _setDefaultLocation();
     }
   }
@@ -313,7 +319,7 @@ class _GoogleMapsScreenState extends State<GoogleMapsScreen> {
     });
     _mapController.move(_kigaliCenter, _currentZoom);
     _addDefaultLocationMarker();
-    _showSnackBar('Showing Kigali Center', Colors.orange);
+    _showSnackBar(context.l10n.showingKigaliCenter, Colors.orange);
   }
 
   // Markers
@@ -333,7 +339,7 @@ class _GoogleMapsScreenState extends State<GoogleMapsScreen> {
               border: Border.all(color: Colors.white, width: 3),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.blue.withOpacity(0.5),
+                  color: Colors.blue.withValues(alpha: 0.5),
                   blurRadius: 12,
                   spreadRadius: 4,
                 ),
@@ -386,7 +392,7 @@ class _GoogleMapsScreenState extends State<GoogleMapsScreen> {
               border: Border.all(color: Colors.white, width: 3),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.red.withOpacity(0.5),
+                  color: Colors.red.withValues(alpha: 0.5),
                   blurRadius: 12,
                   spreadRadius: 4,
                 ),
@@ -439,9 +445,9 @@ class _GoogleMapsScreenState extends State<GoogleMapsScreen> {
         _isSearching = false;
       });
     } catch (e) {
-      print('Search error: $e');
+      debugPrint('Search error: $e');
       setState(() => _isSearching = false);
-      _showSnackBar('Search failed. Please try again.', Colors.red);
+      _showSnackBar(context.l10n.placeSearchFailed, Colors.red);
     }
   }
 
@@ -455,8 +461,11 @@ class _GoogleMapsScreenState extends State<GoogleMapsScreen> {
     _setDestination(position, result['display_name']);
 
     _showSnackBar(
-        '📍 Destination set to ${result['display_name'].toString().split(',').first}',
-        Colors.green);
+      context.l10n.destinationSetTo(
+        result['display_name'].toString().split(',').first,
+      ),
+      Colors.green,
+    );
   }
 
   // Nearby Places
@@ -551,26 +560,32 @@ class _GoogleMapsScreenState extends State<GoogleMapsScreen> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('📍 ${placeType.toUpperCase()}'),
+            Text(
+              '📍 ${context.l10n.placeCategory(_nearbyPlaceLabel(context, placeType))}',
+            ),
             const SizedBox(height: 8),
             Row(
               children: [
                 const Icon(Icons.phone, size: 16, color: Colors.grey),
                 const SizedBox(width: 8),
-                Text(place['phone'] ?? 'No phone available'),
+                Text(place['phone'] ?? context.l10n.noPhoneAvailable),
               ],
             ),
             const Divider(),
-            const Text('📍 OpenStreetMap Nominatim',
-                style: TextStyle(fontSize: 12, color: Colors.green)),
-            const Text('✅ Free Geocoding - No API Key',
-                style: TextStyle(fontSize: 12, color: Colors.green)),
+            const Text(
+              'OpenStreetMap Nominatim',
+              style: TextStyle(fontSize: 12, color: Colors.green),
+            ),
+            Text(
+              '✅ ${context.l10n.freeGeocodingNoApiKey}',
+              style: const TextStyle(fontSize: 12, color: Colors.green),
+            ),
           ],
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Close'),
+            child: Text(context.l10n.close),
           ),
           if (_currentPosition != null)
             ElevatedButton(
@@ -581,7 +596,7 @@ class _GoogleMapsScreenState extends State<GoogleMapsScreen> {
                   place['name'],
                 );
               },
-              child: const Text('Navigate Here'),
+              child: Text(context.l10n.navigateHere),
             ),
         ],
       ),
@@ -606,7 +621,7 @@ class _GoogleMapsScreenState extends State<GoogleMapsScreen> {
                 border: Border.all(color: Colors.white, width: 2),
                 boxShadow: [
                   BoxShadow(
-                    color: const Color(0xFF00A1DE).withOpacity(0.5),
+                    color: const Color(0xFF00A1DE).withValues(alpha: 0.5),
                     blurRadius: 8,
                     spreadRadius: 2,
                   ),
@@ -632,7 +647,7 @@ class _GoogleMapsScreenState extends State<GoogleMapsScreen> {
                 border: Border.all(color: Colors.white, width: 2),
                 boxShadow: [
                   BoxShadow(
-                    color: const Color(0xFF20603D).withOpacity(0.5),
+                    color: const Color(0xFF20603D).withValues(alpha: 0.5),
                     blurRadius: 8,
                     spreadRadius: 2,
                   ),
@@ -658,7 +673,7 @@ class _GoogleMapsScreenState extends State<GoogleMapsScreen> {
                 border: Border.all(color: Colors.white, width: 2),
                 boxShadow: [
                   BoxShadow(
-                    color: const Color(0xFFE1BD00).withOpacity(0.5),
+                    color: const Color(0xFFE1BD00).withValues(alpha: 0.5),
                     blurRadius: 8,
                     spreadRadius: 2,
                   ),
@@ -684,7 +699,7 @@ class _GoogleMapsScreenState extends State<GoogleMapsScreen> {
                 border: Border.all(color: Colors.white, width: 2),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.purple.withOpacity(0.5),
+                    color: Colors.purple.withValues(alpha: 0.5),
                     blurRadius: 8,
                     spreadRadius: 2,
                   ),
@@ -707,7 +722,7 @@ class _GoogleMapsScreenState extends State<GoogleMapsScreen> {
   void _setDestination(LatLng position, [String? address]) {
     setState(() {
       _destinationPosition = ll.LatLng(position.latitude, position.longitude);
-      _destinationAddress = address ?? 'Selected Location';
+      _destinationAddress = address ?? context.l10n.selectedLocation;
       _destinationController.text = _destinationAddress!;
       _showDestinationInput = false;
       _isNavigating = false;
@@ -717,7 +732,7 @@ class _GoogleMapsScreenState extends State<GoogleMapsScreen> {
 
     _addDestinationMarker();
     _mapController.move(_destinationPosition!, 15.0);
-    _showSnackBar('📍 Destination set', Colors.green);
+    _showSnackBar(context.l10n.destinationSet, Colors.green);
   }
 
   void _clearDestination() {
@@ -742,7 +757,7 @@ class _GoogleMapsScreenState extends State<GoogleMapsScreen> {
   // Route Calculation
   Future<void> _getRoute() async {
     if (_currentPosition == null || _destinationPosition == null) {
-      _showSnackBar('Please set destination first', Colors.orange);
+      _showSnackBar(context.l10n.setDestinationFirst, Colors.orange);
       return;
     }
 
@@ -815,8 +830,10 @@ class _GoogleMapsScreenState extends State<GoogleMapsScreen> {
           setState(() => _isLoading = false);
 
           _showSnackBar(
-            '✅ Best route: ${_totalDistance.toStringAsFixed(1)} km, '
-            '${_totalDuration.toStringAsFixed(0)} min',
+            context.l10n.bestRouteSummary(
+              _totalDistance.toStringAsFixed(1),
+              _totalDuration.toStringAsFixed(0),
+            ),
             Colors.green,
           );
         } else {
@@ -828,7 +845,7 @@ class _GoogleMapsScreenState extends State<GoogleMapsScreen> {
     } catch (e) {
       setState(() => _isLoading = false);
       _offlineRoute();
-      print('Routing error: $e');
+      debugPrint('Routing error: $e');
     }
   }
 
@@ -840,7 +857,7 @@ class _GoogleMapsScreenState extends State<GoogleMapsScreen> {
     String modifier = firstStep['maneuver']?['modifier'] ?? '';
 
     if (instruction == 'depart') {
-      return 'Head ${_getDirectionText(modifier)}';
+      return context.l10n.headDirection(_getDirectionText(modifier));
     }
 
     return _capitalize('$instruction $modifier');
@@ -849,21 +866,21 @@ class _GoogleMapsScreenState extends State<GoogleMapsScreen> {
   String _getDirectionText(String modifier) {
     switch (modifier) {
       case 'north':
-        return 'North';
+        return context.l10n.north;
       case 'south':
-        return 'South';
+        return context.l10n.south;
       case 'east':
-        return 'East';
+        return context.l10n.east;
       case 'west':
-        return 'West';
+        return context.l10n.west;
       case 'northeast':
-        return 'Northeast';
+        return context.l10n.northeast;
       case 'northwest':
-        return 'Northwest';
+        return context.l10n.northwest;
       case 'southeast':
-        return 'Southeast';
+        return context.l10n.southeast;
       case 'southwest':
-        return 'Southwest';
+        return context.l10n.southwest;
       default:
         return modifier;
     }
@@ -882,7 +899,7 @@ class _GoogleMapsScreenState extends State<GoogleMapsScreen> {
       _polylines.add(
         Polyline(
           points: [_currentPosition!, _destinationPosition!],
-          color: const Color(0xFF00A1DE).withOpacity(0.7),
+          color: const Color(0xFF00A1DE).withValues(alpha: 0.7),
           strokeWidth: 4.0,
         ),
       );
@@ -895,10 +912,10 @@ class _GoogleMapsScreenState extends State<GoogleMapsScreen> {
               : _travelMode == 'cycling'
                   ? 4
                   : 2);
-      _routeSummary = 'Offline route (direct line)';
+      _routeSummary = context.l10n.offlineDirectRoute;
     });
 
-    _showSnackBar('📍 Offline mode - direct line', Colors.orange);
+    _showSnackBar(context.l10n.offlineDirectLine, Colors.orange);
   }
 
   double _calculateDistance(ll.LatLng start, ll.LatLng end) {
@@ -953,13 +970,13 @@ class _GoogleMapsScreenState extends State<GoogleMapsScreen> {
     return AppPageShell(
       child: Scaffold(
         appBar: AppBar(
-          title: const Column(
+          title: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('🗺️ Free Maps - Rwanda',
-                  style: TextStyle(fontWeight: FontWeight.bold)),
-              Text('Live Location • Free Geocoding',
-                  style: TextStyle(fontSize: 12)),
+              Text(context.l10n.freeMapsRwanda,
+                  style: const TextStyle(fontWeight: FontWeight.bold)),
+              Text(context.l10n.liveLocationFreeGeocoding,
+                  style: const TextStyle(fontSize: 12)),
             ],
           ),
           backgroundColor: const Color(0xFF00A1DE),
@@ -972,12 +989,12 @@ class _GoogleMapsScreenState extends State<GoogleMapsScreen> {
               IconButton(
                 icon: const Icon(Icons.clear),
                 onPressed: _hideNearbyPlaces,
-                tooltip: 'Hide Nearby Places',
+                tooltip: context.l10n.hideNearbyPlaces,
               ),
             IconButton(
               icon: const Icon(Icons.my_location),
               onPressed: _initLocation,
-              tooltip: 'My Location',
+              tooltip: context.l10n.myLocation,
             ),
             const AppBrandControls(),
           ],
@@ -995,7 +1012,7 @@ class _GoogleMapsScreenState extends State<GoogleMapsScreen> {
                   onTap: (tapPosition, point) {
                     _setDestination(
                       LatLng(point.latitude, point.longitude),
-                      'Selected Location',
+                      context.l10n.selectedLocation,
                     );
                   },
                 ),
@@ -1015,19 +1032,19 @@ class _GoogleMapsScreenState extends State<GoogleMapsScreen> {
                               color: Colors.white, size: 16),
                         ),
                         markerSize: const Size(40, 40),
-                        accuracyCircleColor: Colors.blue.withOpacity(0.1),
+                        accuracyCircleColor: Colors.blue.withValues(alpha: 0.1),
                       ),
                     ),
                 ],
               )
             else if (_isLoading)
-              const Center(
+              Center(
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    CircularProgressIndicator(),
-                    SizedBox(height: 16),
-                    Text('Getting your live location...'),
+                    const CircularProgressIndicator(),
+                    const SizedBox(height: 16),
+                    Text(context.l10n.gettingLiveLocation),
                   ],
                 ),
               ),
@@ -1044,7 +1061,7 @@ class _GoogleMapsScreenState extends State<GoogleMapsScreen> {
                       borderRadius: BorderRadius.circular(8),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withOpacity(0.2),
+                          color: Colors.black.withValues(alpha: 0.2),
                           blurRadius: 4,
                           spreadRadius: 1,
                         ),
@@ -1055,13 +1072,13 @@ class _GoogleMapsScreenState extends State<GoogleMapsScreen> {
                         IconButton(
                           icon: const Icon(Icons.add, color: Colors.blue),
                           onPressed: _zoomIn,
-                          tooltip: 'Zoom In',
+                          tooltip: context.l10n.zoomIn,
                         ),
                         const Divider(height: 1, color: Colors.grey),
                         IconButton(
                           icon: const Icon(Icons.remove, color: Colors.blue),
                           onPressed: _zoomOut,
-                          tooltip: 'Zoom Out',
+                          tooltip: context.l10n.zoomOut,
                         ),
                       ],
                     ),
@@ -1086,7 +1103,7 @@ class _GoogleMapsScreenState extends State<GoogleMapsScreen> {
                       controller: _destinationController,
                       focusNode: _searchFocusNode,
                       decoration: InputDecoration(
-                        hintText: 'Search any place in Rwanda...',
+                        hintText: context.l10n.searchPlaceHint,
                         prefixIcon:
                             const Icon(Icons.search, color: Colors.blue),
                         suffixIcon: _destinationPosition != null
@@ -1122,7 +1139,7 @@ class _GoogleMapsScreenState extends State<GoogleMapsScreen> {
                         borderRadius: BorderRadius.circular(16),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withOpacity(0.2),
+                            color: Colors.black.withValues(alpha: 0.2),
                             blurRadius: 8,
                             spreadRadius: 2,
                           ),
@@ -1188,7 +1205,7 @@ class _GoogleMapsScreenState extends State<GoogleMapsScreen> {
                   borderRadius: BorderRadius.circular(30),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.2),
+                      color: Colors.black.withValues(alpha: 0.2),
                       blurRadius: 4,
                       spreadRadius: 1,
                     ),
@@ -1197,12 +1214,12 @@ class _GoogleMapsScreenState extends State<GoogleMapsScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Padding(
+                    Padding(
                       padding:
-                          EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                          const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                       child: Text(
-                        'Nearby Places',
-                        style: TextStyle(
+                        context.l10n.nearbyPlaces,
+                        style: const TextStyle(
                             fontWeight: FontWeight.bold, fontSize: 12),
                       ),
                     ),
@@ -1231,7 +1248,7 @@ class _GoogleMapsScreenState extends State<GoogleMapsScreen> {
                                 ),
                                 const SizedBox(width: 8),
                                 Text(
-                                  place['label'],
+                                  _nearbyPlaceLabel(context, place['type']),
                                   style: TextStyle(
                                     color:
                                         _selectedPlaceType == place['type'] &&
@@ -1276,7 +1293,7 @@ class _GoogleMapsScreenState extends State<GoogleMapsScreen> {
                     borderRadius: BorderRadius.circular(30),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.2),
+                        color: Colors.black.withValues(alpha: 0.2),
                         blurRadius: 4,
                         spreadRadius: 1,
                       ),
@@ -1310,7 +1327,7 @@ class _GoogleMapsScreenState extends State<GoogleMapsScreen> {
                               ),
                               const SizedBox(width: 4),
                               Text(
-                                mode['label'],
+                                _travelModeLabel(context, mode['mode']),
                                 style: TextStyle(
                                   color:
                                       isSelected ? mode['color'] : Colors.grey,
@@ -1358,7 +1375,7 @@ class _GoogleMapsScreenState extends State<GoogleMapsScreen> {
                             Container(
                               padding: const EdgeInsets.all(8),
                               decoration: BoxDecoration(
-                                color: Colors.blue.withOpacity(0.1),
+                                color: Colors.blue.withValues(alpha: 0.1),
                                 shape: BoxShape.circle,
                               ),
                               child:
@@ -1369,15 +1386,16 @@ class _GoogleMapsScreenState extends State<GoogleMapsScreen> {
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  const Text(
-                                    'Best Route',
-                                    style: TextStyle(
+                                  Text(
+                                    context.l10n.bestRoute,
+                                    style: const TextStyle(
                                       fontSize: 12,
                                       color: Colors.grey,
                                     ),
                                   ),
                                   Text(
-                                    _destinationAddress ?? 'Destination',
+                                    _destinationAddress ??
+                                        context.l10n.destination,
                                     style: const TextStyle(
                                       fontSize: 16,
                                       fontWeight: FontWeight.bold,
@@ -1402,7 +1420,9 @@ class _GoogleMapsScreenState extends State<GoogleMapsScreen> {
                                       color: Colors.white, size: 16),
                                   const SizedBox(width: 4),
                                   Text(
-                                    '${_totalDuration.toStringAsFixed(0)} min',
+                                    context.l10n.minutesAbbreviation(
+                                      _totalDuration.toStringAsFixed(0),
+                                    ),
                                     style: const TextStyle(
                                       color: Colors.white,
                                       fontWeight: FontWeight.bold,
@@ -1419,21 +1439,20 @@ class _GoogleMapsScreenState extends State<GoogleMapsScreen> {
                           children: [
                             _buildRouteInfoItem(
                               Icons.speed,
-                              'Distance',
+                              context.l10n.distance,
                               '${_totalDistance.toStringAsFixed(1)} km',
                             ),
                             _buildRouteInfoItem(
                               Icons.directions,
-                              'Travel Mode',
-                              _travelModes.firstWhere(
-                                  (m) => m['mode'] == _travelMode)['label'],
+                              context.l10n.travelMode,
+                              _travelModeLabel(context, _travelMode),
                             ),
                             _buildRouteInfoItem(
                               Icons.info_outline,
-                              'Summary',
+                              context.l10n.summary,
                               _routeSummary.isNotEmpty
                                   ? _routeSummary
-                                  : 'Route ready',
+                                  : context.l10n.routeReady,
                             ),
                           ],
                         ),
@@ -1469,7 +1488,7 @@ class _GoogleMapsScreenState extends State<GoogleMapsScreen> {
                 right: 16,
                 child: FloatingActionButton.extended(
                   onPressed: _toggleDestinationInput,
-                  label: const Text('Set Destination'),
+                  label: Text(context.l10n.setDestination),
                   icon: const Icon(Icons.add_location),
                   backgroundColor: Colors.red,
                 ),
@@ -1480,7 +1499,7 @@ class _GoogleMapsScreenState extends State<GoogleMapsScreen> {
                 right: 16,
                 child: FloatingActionButton.extended(
                   onPressed: _getRoute,
-                  label: const Text('Get Directions'),
+                  label: Text(context.l10n.getDirections),
                   icon: const Icon(Icons.directions),
                   backgroundColor: Colors.green,
                 ),
@@ -1491,7 +1510,7 @@ class _GoogleMapsScreenState extends State<GoogleMapsScreen> {
                 right: 16,
                 child: FloatingActionButton.extended(
                   onPressed: _clearDestination,
-                  label: const Text('Clear Route'),
+                  label: Text(context.l10n.clearRoute),
                   icon: const Icon(Icons.clear),
                   backgroundColor: Colors.orange,
                 ),
@@ -1500,6 +1519,36 @@ class _GoogleMapsScreenState extends State<GoogleMapsScreen> {
         ),
       ),
     );
+  }
+
+  String _nearbyPlaceLabel(BuildContext context, String type) {
+    switch (type) {
+      case 'hospital':
+        return context.l10n.hospitals;
+      case 'hotel':
+        return context.l10n.hotels;
+      case 'restaurant':
+        return context.l10n.restaurants;
+      case 'cafe':
+        return context.l10n.coffeeShops;
+      case 'bar':
+        return context.l10n.bars;
+      default:
+        return type;
+    }
+  }
+
+  String _travelModeLabel(BuildContext context, String mode) {
+    switch (mode) {
+      case 'driving':
+        return context.l10n.car;
+      case 'walking':
+        return context.l10n.walk;
+      case 'cycling':
+        return context.l10n.bicycle;
+      default:
+        return mode;
+    }
   }
 
   Widget _buildRouteInfoItem(IconData icon, String label, String value) {

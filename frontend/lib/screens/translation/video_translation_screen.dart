@@ -1,6 +1,7 @@
+// ignore_for_file: use_build_context_synchronously
+
 import 'dart:async';
 import 'dart:io';
-import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
 import 'package:chewie/chewie.dart';
@@ -16,6 +17,8 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:permission_handler/permission_handler.dart';
 import 'package:path/path.dart' as p;
 import 'package:provider/provider.dart';
+
+import '../../l10n/app_localizations_extensions.dart';
 import '../../core/network/api_config.dart';
 import '../../core/network/api_client.dart';
 import '../../widgets/app_sidebar.dart';
@@ -256,7 +259,7 @@ class _VideoTranslationScreenState extends State<VideoTranslationScreen> {
     _flutterTts.setErrorHandler((err) {
       if (!mounted) return;
       setState(() => _isPlayingSound = false);
-      _showSnackBar('TTS error: $err', Colors.red);
+      _showSnackBar(context.l10n.textToSpeechError(err.toString()), Colors.red);
     });
   }
 
@@ -282,11 +285,10 @@ class _VideoTranslationScreenState extends State<VideoTranslationScreen> {
       _liveTranslationSubscription?.cancel();
       setState(() {
         _isTranslating = false;
-        _liveStatus =
-            'Live translation timed out. Please try again with a shorter video.';
+        _liveStatus = context.l10n.liveTranslationTimedOut;
       });
       _showSnackBar(
-        'Live translation timed out. Please try again with a shorter video.',
+        context.l10n.liveTranslationTimedOut,
         Colors.red,
       );
     });
@@ -368,8 +370,7 @@ class _VideoTranslationScreenState extends State<VideoTranslationScreen> {
     if (cameraStatus.isPermanentlyDenied ||
         microphoneStatus.isPermanentlyDenied) {
       _showSnackBar(
-          'Camera or microphone access is permanently denied. Please enable it in app settings.',
-          Colors.orange);
+          context.l10n.mediaPermissionPermanentlyDenied, Colors.orange);
       return false;
     }
 
@@ -383,8 +384,7 @@ class _VideoTranslationScreenState extends State<VideoTranslationScreen> {
     }
 
     _showSnackBar(
-        'Camera and microphone permissions are required to record video.',
-        Colors.orange);
+        context.l10n.cameraMicrophonePermissionsRequired, Colors.orange);
     return false;
   }
 
@@ -403,16 +403,15 @@ class _VideoTranslationScreenState extends State<VideoTranslationScreen> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Text(
-                  'Choose how to provide your video',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                Text(
+                  context.l10n.chooseVideoSource,
+                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 12),
                 ListTile(
                   leading: const Icon(Icons.videocam, color: Colors.blue),
-                  title: const Text('Record video'),
-                  subtitle:
-                      const Text('Use your camera to capture a new video'),
+                  title: Text(context.l10n.recordVideo),
+                  subtitle: Text(context.l10n.recordVideoDescription),
                   onTap: () async {
                     Navigator.pop(context);
                     await _recordVideo();
@@ -420,8 +419,8 @@ class _VideoTranslationScreenState extends State<VideoTranslationScreen> {
                 ),
                 ListTile(
                   leading: const Icon(Icons.upload_file, color: Colors.green),
-                  title: const Text('Upload video from local storage'),
-                  subtitle: const Text('Pick a video file from your device'),
+                  title: Text(context.l10n.uploadVideoFromStorage),
+                  subtitle: Text(context.l10n.pickVideoDescription),
                   onTap: () async {
                     Navigator.pop(context);
                     await _pickVideoFile();
@@ -443,7 +442,7 @@ class _VideoTranslationScreenState extends State<VideoTranslationScreen> {
       );
 
       if (result == null || result.files.isEmpty) {
-        _showSnackBar('No video file was selected.', Colors.orange);
+        _showSnackBar(context.l10n.noVideoSelected, Colors.orange);
         return;
       }
 
@@ -468,9 +467,9 @@ class _VideoTranslationScreenState extends State<VideoTranslationScreen> {
       if (_selectedMediaFile != null) {
         _initializeLocalVideoPlayer(_selectedMediaFile!);
       }
-      _showSnackBar('✅ Video selected: ${picked.name}', Colors.green);
+      _showSnackBar(context.l10n.videoSelected(picked.name), Colors.green);
     } catch (e) {
-      _showSnackBar('Unable to pick the video file: $e', Colors.red);
+      _showSnackBar(context.l10n.videoPickFailed(e.toString()), Colors.red);
     }
   }
 
@@ -488,7 +487,7 @@ class _VideoTranslationScreenState extends State<VideoTranslationScreen> {
         ),
       );
       if (video == null) {
-        _showSnackBar('No video was recorded.', Colors.orange);
+        _showSnackBar(context.l10n.noVideoRecorded, Colors.orange);
         return;
       }
 
@@ -516,9 +515,9 @@ class _VideoTranslationScreenState extends State<VideoTranslationScreen> {
         _initializeLocalVideoPlayer(_selectedMediaFile!);
       }
 
-      _showSnackBar('✅ Video recorded: ${video.name}', Colors.green);
+      _showSnackBar(context.l10n.videoRecorded(video.name), Colors.green);
     } catch (e) {
-      _showSnackBar('Unable to record the video: $e', Colors.red);
+      _showSnackBar(context.l10n.videoRecordFailed(e.toString()), Colors.red);
     }
   }
 
@@ -576,7 +575,7 @@ class _VideoTranslationScreenState extends State<VideoTranslationScreen> {
   Future<void> _uploadMedia(
       {File? file, Uint8List? bytes, String? filename}) async {
     if (file == null && bytes == null) {
-      _showSnackBar('No media selected', Colors.orange);
+      _showSnackBar(context.l10n.noMediaSelected, Colors.orange);
       return;
     }
 
@@ -592,7 +591,7 @@ class _VideoTranslationScreenState extends State<VideoTranslationScreen> {
       _summaryText = '';
       _summaryLanguageName = '';
       _liveSubtitleText = '';
-      _liveStatus = 'Preparing live translated subtitles...';
+      _liveStatus = context.l10n.preparingLiveSubtitles;
       _subtitles.clear();
       _subtitleKeys.clear();
       _currentSubtitleIndex = -1;
@@ -633,12 +632,12 @@ class _VideoTranslationScreenState extends State<VideoTranslationScreen> {
       );
       final data = response.data;
       if (data == null) {
-        throw Exception('Unexpected response format from translation service.');
+        throw Exception(context.l10n.invalidTranslationResponse);
       }
       _applyTranslationPayload(data);
-      _showSnackBar('✅ Translation complete!', Colors.green);
+      _showSnackBar(context.l10n.translationComplete, Colors.green);
     } catch (e) {
-      _showSnackBar('Media upload failed: $e', Colors.red);
+      _showSnackBar(context.l10n.mediaUploadFailed(e.toString()), Colors.red);
     } finally {
       if (mounted) {
         setState(() => _isTranslating = false);
@@ -650,7 +649,7 @@ class _VideoTranslationScreenState extends State<VideoTranslationScreen> {
   Future<void> _translateYouTubeUrl() async {
     final url = _urlController.text.trim();
     if (url.isEmpty) {
-      _showSnackBar('Please enter a YouTube URL', Colors.orange);
+      _showSnackBar(context.l10n.enterYoutubeUrl, Colors.orange);
       return;
     }
 
@@ -665,7 +664,7 @@ class _VideoTranslationScreenState extends State<VideoTranslationScreen> {
       _summaryText = '';
       _summaryLanguageName = '';
       _liveSubtitleText = '';
-      _liveStatus = 'Preparing live translated subtitles...';
+      _liveStatus = context.l10n.preparingLiveSubtitles;
       _subtitles.clear();
       _subtitleKeys.clear();
       _currentSubtitleIndex = -1;
@@ -692,8 +691,8 @@ class _VideoTranslationScreenState extends State<VideoTranslationScreen> {
         final error = body.isEmpty ? null : jsonDecode(body);
         throw Exception(
           error is Map
-              ? error['error'] ?? 'YouTube live translation failed'
-              : 'YouTube live translation failed',
+              ? error['error'] ?? context.l10n.youtubeLiveTranslationFailed
+              : context.l10n.youtubeLiveTranslationFailed,
         );
       }
 
@@ -710,7 +709,12 @@ class _VideoTranslationScreenState extends State<VideoTranslationScreen> {
           if (!mounted || runId != _liveTranslationRunId) return;
           _stopLiveTranslationWatchdog();
           setState(() => _isTranslating = false);
-          _showSnackBar('YouTube live translation failed: $error', Colors.red);
+          _showSnackBar(
+            context.l10n.youtubeLiveTranslationFailedWithError(
+              error.toString(),
+            ),
+            Colors.red,
+          );
         },
         onDone: () {
           if (!mounted || runId != _liveTranslationRunId) return;
@@ -718,8 +722,8 @@ class _VideoTranslationScreenState extends State<VideoTranslationScreen> {
           setState(() {
             _isTranslating = false;
             _liveStatus = _subtitles.isEmpty
-                ? 'No spoken phrases were detected.'
-                : 'Live subtitles ready.';
+                ? context.l10n.noSpokenPhrasesDetected
+                : context.l10n.liveSubtitlesReady;
           });
         },
         cancelOnError: true,
@@ -727,7 +731,10 @@ class _VideoTranslationScreenState extends State<VideoTranslationScreen> {
     } catch (e) {
       _stopLiveTranslationWatchdog();
       setState(() => _isTranslating = false);
-      _showSnackBar('YouTube live translation failed: $e', Colors.red);
+      _showSnackBar(
+        context.l10n.youtubeLiveTranslationFailedWithError(e.toString()),
+        Colors.red,
+      );
     }
   }
 
@@ -744,7 +751,10 @@ class _VideoTranslationScreenState extends State<VideoTranslationScreen> {
         _isTranslating = false;
         _liveStatus = '';
       });
-      _showSnackBar(event['error'] ?? 'Live translation failed', Colors.red);
+      _showSnackBar(
+        event['error'] ?? context.l10n.liveTranslationFailed,
+        Colors.red,
+      );
       return;
     }
 
@@ -752,7 +762,7 @@ class _VideoTranslationScreenState extends State<VideoTranslationScreen> {
       _stopLiveTranslationWatchdog();
       setState(() {
         _isTranslating = false;
-        _liveStatus = 'Live subtitles ready.';
+        _liveStatus = context.l10n.liveSubtitlesReady;
       });
       return;
     }
@@ -783,8 +793,7 @@ class _VideoTranslationScreenState extends State<VideoTranslationScreen> {
         if (_translatedText.isNotEmpty) _translatedText,
         translated,
       ].join(' ');
-      _liveStatus =
-          'Translated ${_subtitles.length} spoken phrase${_subtitles.length == 1 ? '' : 's'}...';
+      _liveStatus = context.l10n.translatedSpokenPhrases(_subtitles.length);
     });
 
     _syncLiveSubtitleToPlayback();
@@ -876,7 +885,7 @@ class _VideoTranslationScreenState extends State<VideoTranslationScreen> {
   Future<void> _summarizeMedia(
       {File? file, Uint8List? bytes, String? filename}) async {
     if (file == null && bytes == null) {
-      _showSnackBar('No media selected', Colors.orange);
+      _showSnackBar(context.l10n.noMediaSelected, Colors.orange);
       return;
     }
 
@@ -916,16 +925,19 @@ class _VideoTranslationScreenState extends State<VideoTranslationScreen> {
       );
       final data = response.data;
       if (data == null) {
-        throw Exception('The media summary response was empty.');
+        throw Exception(context.l10n.emptyMediaSummaryResponse);
       }
       setState(() {
         _originalTranscript = '';
         _summaryText = data['summary_text']?.toString() ?? '';
         _summaryLanguageName = data['detected_language_name']?.toString() ?? '';
       });
-      _showSnackBar('Summary complete!', Colors.orange);
+      _showSnackBar(context.l10n.summaryComplete, Colors.orange);
     } catch (e) {
-      _showSnackBar('Media summarization failed: $e', Colors.red);
+      _showSnackBar(
+        context.l10n.mediaSummarizationFailed(e.toString()),
+        Colors.red,
+      );
     } finally {
       if (mounted) {
         setState(() => _isSummarizing = false);
@@ -936,7 +948,7 @@ class _VideoTranslationScreenState extends State<VideoTranslationScreen> {
   Future<void> _summarizeYouTubeUrl() async {
     final url = _urlController.text.trim();
     if (url.isEmpty) {
-      _showSnackBar('Please enter a YouTube URL', Colors.orange);
+      _showSnackBar(context.l10n.enterYoutubeUrl, Colors.orange);
       return;
     }
 
@@ -955,7 +967,7 @@ class _VideoTranslationScreenState extends State<VideoTranslationScreen> {
 
       final data = response.data;
       if (data == null) {
-        throw Exception('The YouTube summary response was empty.');
+        throw Exception(context.l10n.emptyYoutubeSummaryResponse);
       }
       setState(() {
         _originalTranscript = '';
@@ -964,10 +976,13 @@ class _VideoTranslationScreenState extends State<VideoTranslationScreen> {
         _isSummarizing = false;
       });
 
-      _showSnackBar('Summary complete!', Colors.orange);
+      _showSnackBar(context.l10n.summaryComplete, Colors.orange);
     } catch (e) {
       setState(() => _isSummarizing = false);
-      _showSnackBar('YouTube summarization failed: $e', Colors.red);
+      _showSnackBar(
+        context.l10n.youtubeSummarizationFailed(e.toString()),
+        Colors.red,
+      );
     }
   }
 
@@ -984,46 +999,10 @@ class _VideoTranslationScreenState extends State<VideoTranslationScreen> {
     } else if (_selectedMediaFile == null &&
         _selectedMediaBytes == null &&
         _videoSource != 'youtube') {
-      _showSnackBar(
-          'Please select a video file or record a video first.', Colors.orange);
+      _showSnackBar(context.l10n.selectOrRecordVideo, Colors.orange);
     } else {
-      _showSnackBar(
-          'Please enter a YouTube URL or select a video first.', Colors.orange);
+      _showSnackBar(context.l10n.enterYoutubeUrlOrSelectVideo, Colors.orange);
     }
-  }
-
-  void _generateSubtitles() {
-    if (_originalTranscript.isEmpty) return;
-
-    setState(() {
-      _subtitles = [
-        {
-          'start': '00:00',
-          'end': '00:05',
-          'original': _originalTranscript.substring(
-              0, min(50, _originalTranscript.length)),
-          'translated': _translatedText.isNotEmpty
-              ? _translatedText.substring(0, min(50, _translatedText.length))
-              : '',
-        },
-        {
-          'start': '00:05',
-          'end': '00:10',
-          'original': 'Media content continues...',
-          'translated': _targetLanguage == 'fr'
-              ? 'Le contenu continue...'
-              : _targetLanguage == 'rw'
-                  ? 'Ibindi bikurikira...'
-                  : 'Media content continues...',
-        },
-      ];
-      _subtitleKeys
-        ..clear()
-        ..addAll(List.generate(_subtitles.length, (_) => GlobalKey()));
-      _currentSubtitleIndex = -1;
-    });
-
-    _showSnackBar('✅ Subtitles generated!', Colors.green);
   }
 
   void _clearAll() {
@@ -1062,7 +1041,7 @@ class _VideoTranslationScreenState extends State<VideoTranslationScreen> {
 
   Future<void> _speakTranslatedText() async {
     if (_translatedText.isEmpty) {
-      _showSnackBar('Nothing to play. Translate first.', Colors.orange);
+      _showSnackBar(context.l10n.nothingToPlay, Colors.orange);
       return;
     }
 
@@ -1087,7 +1066,7 @@ class _VideoTranslationScreenState extends State<VideoTranslationScreen> {
         await _flutterTts.speak(_translatedText);
       }
     } catch (e) {
-      _showSnackBar('Unable to play audio: $e', Colors.red);
+      _showSnackBar(context.l10n.unableToPlayAudio(e.toString()), Colors.red);
       setState(() => _isPlayingSound = false);
     }
   }
@@ -1163,7 +1142,7 @@ class _VideoTranslationScreenState extends State<VideoTranslationScreen> {
     return AppPageShell(
       child: Scaffold(
         appBar: AppBar(
-          title: const Text('Video Translation'),
+          title: Text(context.l10n.videoTranslation),
           elevation: 0,
           backgroundColor: Colors.blue,
           foregroundColor: Colors.white,
@@ -1186,8 +1165,10 @@ class _VideoTranslationScreenState extends State<VideoTranslationScreen> {
                           children: [
                             const Icon(Icons.link, size: 16),
                             const SizedBox(width: 4),
-                            const Text('YouTube',
-                                style: TextStyle(color: Colors.blue)),
+                            Text(
+                              context.l10n.youtube,
+                              style: const TextStyle(color: Colors.blue),
+                            ),
                           ],
                         ),
                         selected: _videoSource == 'youtube',
@@ -1213,8 +1194,10 @@ class _VideoTranslationScreenState extends State<VideoTranslationScreen> {
                           children: [
                             const Icon(Icons.video_file, size: 16),
                             const SizedBox(width: 4),
-                            const Text('Video',
-                                style: TextStyle(color: Colors.blue)),
+                            Text(
+                              context.l10n.video,
+                              style: const TextStyle(color: Colors.blue),
+                            ),
                           ],
                         ),
                         selected: _mediaType == 'video',
@@ -1254,8 +1237,8 @@ class _VideoTranslationScreenState extends State<VideoTranslationScreen> {
                     children: [
                       Text(
                         _videoSource == 'youtube'
-                            ? 'YouTube URL'
-                            : 'Video File',
+                            ? context.l10n.youtubeUrl
+                            : context.l10n.videoFile,
                         style: const TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.bold,
@@ -1290,7 +1273,7 @@ class _VideoTranslationScreenState extends State<VideoTranslationScreen> {
                                     size: 48, color: Colors.blue),
                                 const SizedBox(height: 8),
                                 Text(
-                                  'Tap to select a video file or record video',
+                                  context.l10n.tapToSelectOrRecordVideo,
                                   textAlign: TextAlign.center,
                                   style: TextStyle(color: Colors.grey.shade600),
                                 ),
@@ -1369,11 +1352,12 @@ class _VideoTranslationScreenState extends State<VideoTranslationScreen> {
                                       _selectedMediaBytes == null &&
                                       _videoSource != 'youtube') {
                                     _showSnackBar(
-                                        'Please select a video file or record a video first.',
+                                        context.l10n.selectOrRecordVideo,
                                         Colors.orange);
                                   } else {
                                     _showSnackBar(
-                                        'Please enter a YouTube URL or select a video first.',
+                                        context
+                                            .l10n.enterYoutubeUrlOrSelectVideo,
                                         Colors.orange);
                                   }
                                 },
@@ -1388,7 +1372,10 @@ class _VideoTranslationScreenState extends State<VideoTranslationScreen> {
                                 )
                               : const Icon(Icons.translate),
                           label: Text(
-                              _isTranslating ? 'Translating...' : 'Translate'),
+                            _isTranslating
+                                ? context.l10n.translating
+                                : context.l10n.translate,
+                          ),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: Colors.blue,
                             foregroundColor: Colors.white,
@@ -1409,15 +1396,17 @@ class _VideoTranslationScreenState extends State<VideoTranslationScreen> {
                             child: DropdownButtonFormField<String>(
                               initialValue: _sourceLanguage,
                               decoration: InputDecoration(
-                                labelText: 'Source language',
+                                labelText: context.l10n.sourceLanguage,
                                 filled: true,
                                 fillColor: Colors.white,
                                 border: OutlineInputBorder(
                                     borderRadius: BorderRadius.circular(8)),
                               ),
                               items: [
-                                const DropdownMenuItem(
-                                    value: 'auto', child: Text('Auto')),
+                                DropdownMenuItem(
+                                  value: 'auto',
+                                  child: Text(context.l10n.auto),
+                                ),
                                 ..._languages.map((l) => DropdownMenuItem(
                                     value: l['code'], child: Text(l['name']!))),
                               ],
@@ -1430,7 +1419,7 @@ class _VideoTranslationScreenState extends State<VideoTranslationScreen> {
                             child: DropdownButtonFormField<String>(
                               initialValue: _targetLanguage,
                               decoration: InputDecoration(
-                                labelText: 'Target language',
+                                labelText: context.l10n.targetLanguage,
                                 filled: true,
                                 fillColor: Colors.white,
                                 border: OutlineInputBorder(
@@ -1576,8 +1565,10 @@ class _VideoTranslationScreenState extends State<VideoTranslationScreen> {
                           Expanded(
                             child: Text(
                               _summaryLanguageName.isNotEmpty
-                                  ? 'Summary ($_summaryLanguageName):'
-                                  : 'Summary:',
+                                  ? context.l10n.summaryForLanguage(
+                                      _summaryLanguageName,
+                                    )
+                                  : context.l10n.summary,
                               style: const TextStyle(
                                 fontWeight: FontWeight.bold,
                                 fontSize: 16,
@@ -1608,9 +1599,9 @@ class _VideoTranslationScreenState extends State<VideoTranslationScreen> {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          const Text(
-                            'Live Transcript:',
-                            style: TextStyle(
+                          Text(
+                            context.l10n.liveTranscript,
+                            style: const TextStyle(
                               fontWeight: FontWeight.bold,
                               fontSize: 16,
                             ),
@@ -1624,8 +1615,10 @@ class _VideoTranslationScreenState extends State<VideoTranslationScreen> {
                                 ),
                                 child: Text(
                                   _showBothLanguages
-                                      ? '$_targetLanguageName only'
-                                      : 'Show both languages',
+                                      ? context.l10n.targetLanguageOnly(
+                                          _targetLanguageName,
+                                        )
+                                      : context.l10n.showBothLanguages,
                                 ),
                               ),
                               const SizedBox(width: 8),
@@ -1648,9 +1641,11 @@ class _VideoTranslationScreenState extends State<VideoTranslationScreen> {
                                             ? Icons.stop
                                             : Icons.volume_up),
                                         const SizedBox(width: 6),
-                                        Text(_isPlayingSound
-                                            ? 'Stop'
-                                            : 'Listen'),
+                                        Text(
+                                          _isPlayingSound
+                                              ? context.l10n.stop
+                                              : context.l10n.listen,
+                                        ),
                                       ],
                                     ),
                                   ),
@@ -1740,10 +1735,10 @@ class _VideoTranslationScreenState extends State<VideoTranslationScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      'Study Tools',
+                    Text(
+                      context.l10n.studyTools,
                       style:
-                          TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                          const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                     ),
                     const SizedBox(height: 12),
                     Row(
@@ -1751,7 +1746,7 @@ class _VideoTranslationScreenState extends State<VideoTranslationScreen> {
                         Expanded(
                           child: _buildStudyToolCard(
                             icon: Icons.summarize,
-                            label: 'Summarize',
+                            label: context.l10n.summarize,
                             color: Colors.orange,
                             onTap:
                                 _isLoading || _isTranslating || _isSummarizing
@@ -1763,13 +1758,19 @@ class _VideoTranslationScreenState extends State<VideoTranslationScreen> {
                         Expanded(
                           child: _buildStudyToolCard(
                             icon: Icons.note_add,
-                            label: 'Study Notes',
+                            label: context.l10n.studyNotes,
                             color: Colors.purple,
                             onTap: () {
                               if (_translatedText.isNotEmpty) {
-                                _showSnackBar('Notes saved!', Colors.purple);
+                                _showSnackBar(
+                                  context.l10n.notesSaved,
+                                  Colors.purple,
+                                );
                               } else {
-                                _showSnackBar('Translate first', Colors.orange);
+                                _showSnackBar(
+                                  context.l10n.translateFirst,
+                                  Colors.orange,
+                                );
                               }
                             },
                           ),
@@ -1782,14 +1783,19 @@ class _VideoTranslationScreenState extends State<VideoTranslationScreen> {
                         Expanded(
                           child: _buildStudyToolCard(
                             icon: Icons.translate,
-                            label: 'Vocabulary',
+                            label: context.l10n.vocabulary,
                             color: Colors.teal,
                             onTap: () {
                               if (_translatedText.isNotEmpty) {
                                 _showSnackBar(
-                                    'Key vocabulary extracted!', Colors.teal);
+                                  context.l10n.keyVocabularyExtracted,
+                                  Colors.teal,
+                                );
                               } else {
-                                _showSnackBar('Translate first', Colors.orange);
+                                _showSnackBar(
+                                  context.l10n.translateFirst,
+                                  Colors.orange,
+                                );
                               }
                             },
                           ),
@@ -1798,11 +1804,13 @@ class _VideoTranslationScreenState extends State<VideoTranslationScreen> {
                         Expanded(
                           child: _buildStudyToolCard(
                             icon: Icons.quiz,
-                            label: 'Quiz',
+                            label: context.l10n.quiz,
                             color: Colors.brown,
                             onTap: () {
                               _showSnackBar(
-                                  'Quiz generation coming soon!', Colors.brown);
+                                context.l10n.quizGenerationComingSoon,
+                                Colors.brown,
+                              );
                             },
                           ),
                         ),
@@ -1885,7 +1893,7 @@ class _VideoRecorderScreenState extends State<_VideoRecorderScreen> {
     try {
       final cameras = await availableCameras();
       if (cameras.isEmpty) {
-        throw Exception('No camera was found on this device.');
+        throw Exception(context.l10n.noCameraFound);
       }
 
       final camera = cameras.firstWhere(
@@ -1910,7 +1918,7 @@ class _VideoRecorderScreenState extends State<_VideoRecorderScreen> {
       });
     } catch (e) {
       setState(() {
-        _errorMessage = 'Unable to open camera: $e';
+        _errorMessage = context.l10n.cameraOpenFailed(e.toString());
       });
     }
   }
@@ -1937,7 +1945,7 @@ class _VideoRecorderScreenState extends State<_VideoRecorderScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        _errorMessage = 'Recording failed: $e';
+        _errorMessage = context.l10n.videoRecordingFailed(e.toString());
         _isRecording = false;
       });
     }
@@ -1948,7 +1956,7 @@ class _VideoRecorderScreenState extends State<_VideoRecorderScreen> {
     return Scaffold(
       backgroundColor: Colors.black,
       appBar: AppBar(
-        title: const Text('Record Video'),
+        title: Text(context.l10n.recordVideo),
         backgroundColor: Colors.black,
         foregroundColor: Colors.white,
         actions: const [AppBrandControls()],
@@ -2000,7 +2008,10 @@ class _VideoRecorderScreenState extends State<_VideoRecorderScreen> {
                     icon: Icon(
                         _isRecording ? Icons.stop : Icons.fiber_manual_record),
                     label: Text(
-                        _isRecording ? 'Stop Recording' : 'Start Recording'),
+                      _isRecording
+                          ? context.l10n.stopRecording
+                          : context.l10n.startRecording,
+                    ),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: _isRecording ? Colors.red : Colors.white,
                       foregroundColor: _isRecording ? Colors.white : Colors.red,

@@ -121,6 +121,11 @@ class User(AbstractBaseUser, PermissionsMixin):
         OTHER = 'other', 'Other'
         PREFER_NOT_TO_SAY = 'prefer_not_to_say', 'Prefer not to say'
 
+    class SystemLanguage(models.TextChoices):
+        ENGLISH = 'en', 'English'
+        KINYARWANDA = 'rw', 'Kinyarwanda'
+        FRENCH = 'fr', 'French'
+
     username = models.CharField(
         max_length=150,
         unique=True,
@@ -130,6 +135,11 @@ class User(AbstractBaseUser, PermissionsMixin):
     phone_number = models.CharField(max_length=32, unique=True)
     country = models.CharField(max_length=100)
     gender = models.CharField(max_length=32, choices=Gender.choices)
+    system_language = models.CharField(
+        max_length=2,
+        choices=SystemLanguage.choices,
+        default=SystemLanguage.ENGLISH,
+    )
     role = models.ForeignKey(Role, on_delete=models.PROTECT, related_name='users')
     is_active = models.BooleanField(default=True)
     is_staff = models.BooleanField(default=False)

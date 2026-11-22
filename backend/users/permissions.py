@@ -127,6 +127,10 @@ class CanViewUserProfile(CapabilityPermission):
     name = 'CanViewUserProfile'
 
 
+class CanChangeSystemLanguage(CapabilityPermission):
+    name = 'CanChangeSystemLanguage'
+
+
 class CanViewHealthStatus(CapabilityPermission):
     name = 'CanViewHealthStatus'
     allow_anonymous = True

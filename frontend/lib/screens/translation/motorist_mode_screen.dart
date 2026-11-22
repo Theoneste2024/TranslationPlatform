@@ -1,12 +1,13 @@
+// ignore_for_file: use_build_context_synchronously
+
 // ✅ Added for future distance calculations
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:flutter_map/flutter_map.dart'; // ✅ FREE OSM - NO API KEY
 import 'package:latlong2/latlong.dart'; // ✅ FREE coordinates
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 import 'package:flutter_tts/flutter_tts.dart';
-import '../../providers/motorist_provider.dart';
+import '../../l10n/app_localizations_extensions.dart';
 import '../../widgets/app_sidebar.dart';
 import '../../widgets/app_header.dart';
 
@@ -104,7 +105,7 @@ class _MotoristModeScreenState extends State<MotoristModeScreen>
       });
       _mapController.move(_currentPosition!, 15.0);
     } catch (e) {
-      print('Error getting location: $e');
+      debugPrint('Error getting location: $e');
     }
   }
 
@@ -123,7 +124,7 @@ class _MotoristModeScreenState extends State<MotoristModeScreen>
             border: Border.all(color: Colors.white, width: 2),
             boxShadow: [
               BoxShadow(
-                color: Colors.blue.withOpacity(0.5),
+                color: Colors.blue.withValues(alpha: 0.5),
                 blurRadius: 8,
                 spreadRadius: 2,
               ),
@@ -138,7 +139,7 @@ class _MotoristModeScreenState extends State<MotoristModeScreen>
   void _startContinuousListening() async {
     bool available = await _speech.initialize(
       onStatus: (status) {
-        print('Speech status: $status');
+        debugPrint('Speech status: $status');
         if (status == 'done' || status == 'notListening') {
           Future.delayed(const Duration(milliseconds: 500), () {
             if (mounted) {
@@ -147,18 +148,21 @@ class _MotoristModeScreenState extends State<MotoristModeScreen>
           });
         }
       },
-      onError: (error) => print('Speech error: $error'),
+      onError: (error) => debugPrint('Speech error: $error'),
     );
 
     if (available) {
       setState(() => _isListening = true);
       await _speech.listen(
         onResult: (result) => _processVoiceCommand(result.recognizedWords),
-        listenFor: const Duration(hours: 1),
-        pauseFor: const Duration(seconds: 3),
-        partialResults: true,
-        localeId: 'rw_RW',
-        cancelOnError: false,
+        listenOptions: stt.SpeechListenOptions(
+          listenMode: stt.ListenMode.confirmation,
+          listenFor: const Duration(hours: 1),
+          pauseFor: const Duration(seconds: 3),
+          partialResults: true,
+          localeId: 'rw_RW',
+          cancelOnError: false,
+        ),
       );
     }
   }
@@ -250,14 +254,11 @@ class _MotoristModeScreenState extends State<MotoristModeScreen>
 
   @override
   Widget build(BuildContext context) {
-    final motoristProvider = Provider.of<MotoristProvider>(context);
-    final size = MediaQuery.of(context).size;
-
     return AppPageShell(
       child: Scaffold(
         backgroundColor: Colors.black,
         appBar: AppBar(
-          title: const Text('Driver Mode'),
+          title: Text(context.l10n.driverMode),
           backgroundColor: Colors.black,
           foregroundColor: Colors.white,
           leading: const AppMenuButton(),
@@ -298,7 +299,7 @@ class _MotoristModeScreenState extends State<MotoristModeScreen>
                   Container(
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      color: Colors.black.withOpacity(0.8),
+                      color: Colors.black.withValues(alpha: 0.8),
                       borderRadius: const BorderRadius.only(
                         bottomLeft: Radius.circular(20),
                         bottomRight: Radius.circular(20),
@@ -323,9 +324,9 @@ class _MotoristModeScreenState extends State<MotoristModeScreen>
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              const Text(
-                                'Motorist Mode Active',
-                                style: TextStyle(
+                              Text(
+                                context.l10n.motoristModeActive,
+                                style: const TextStyle(
                                   color: Colors.white,
                                   fontWeight: FontWeight.bold,
                                   fontSize: 16,
@@ -333,8 +334,8 @@ class _MotoristModeScreenState extends State<MotoristModeScreen>
                               ),
                               Text(
                                 _isListening
-                                    ? 'Listening for commands...'
-                                    : 'Tap to activate',
+                                    ? context.l10n.listeningForCommands
+                                    : context.l10n.tapToActivate,
                                 style: const TextStyle(
                                   color: Colors.white70,
                                   fontSize: 12,
@@ -358,7 +359,7 @@ class _MotoristModeScreenState extends State<MotoristModeScreen>
                   Container(
                     padding: const EdgeInsets.all(20),
                     decoration: BoxDecoration(
-                      color: Colors.black.withOpacity(0.9),
+                      color: Colors.black.withValues(alpha: 0.9),
                       borderRadius: const BorderRadius.only(
                         topLeft: Radius.circular(30),
                         topRight: Radius.circular(30),
@@ -371,7 +372,7 @@ class _MotoristModeScreenState extends State<MotoristModeScreen>
                           children: [
                             _buildQuickActionButton(
                               icon: Icons.translate,
-                              label: 'Translate',
+                              label: context.l10n.translate,
                               onTap: () {
                                 _flutterTts
                                     .speak('Say what you want to translate');
@@ -379,19 +380,19 @@ class _MotoristModeScreenState extends State<MotoristModeScreen>
                             ),
                             _buildQuickActionButton(
                               icon: Icons.map,
-                              label: 'Navigate',
+                              label: context.l10n.navigate,
                               onTap: () {
                                 _flutterTts.speak('Where do you want to go?');
                               },
                             ),
                             _buildQuickActionButton(
                               icon: Icons.attach_money,
-                              label: 'Fare',
+                              label: context.l10n.fare,
                               onTap: _handleFareCalculation,
                             ),
                             _buildQuickActionButton(
                               icon: Icons.phone,
-                              label: 'Call',
+                              label: context.l10n.call,
                               onTap: _handleCallPassenger,
                             ),
                           ],
@@ -418,8 +419,8 @@ class _MotoristModeScreenState extends State<MotoristModeScreen>
                                   children: [
                                     Text(
                                       _isNavigating
-                                          ? 'Currently navigating'
-                                          : 'Ready for passengers',
+                                          ? context.l10n.currentlyNavigating
+                                          : context.l10n.readyForPassengers,
                                       style: const TextStyle(
                                         color: Colors.white,
                                         fontWeight: FontWeight.bold,
@@ -427,8 +428,8 @@ class _MotoristModeScreenState extends State<MotoristModeScreen>
                                     ),
                                     Text(
                                       _isNavigating
-                                          ? 'Follow the route'
-                                          : 'Tap to start navigation',
+                                          ? context.l10n.followTheRoute
+                                          : context.l10n.tapToStartNavigation,
                                       style: const TextStyle(
                                         color: Colors.white70,
                                         fontSize: 12,
@@ -492,9 +493,9 @@ class _MotoristModeScreenState extends State<MotoristModeScreen>
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              'Voice Commands',
-              style: TextStyle(
+            Text(
+              context.l10n.voiceCommands,
+              style: const TextStyle(
                 color: Colors.white,
                 fontSize: 20,
                 fontWeight: FontWeight.bold,

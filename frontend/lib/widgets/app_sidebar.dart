@@ -4,6 +4,8 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../l10n/app_localizations_extensions.dart';
+
 import '../core/constants/system_ui.dart';
 import '../providers/auth_provider.dart';
 
@@ -106,7 +108,9 @@ class AppMenuButton extends StatelessWidget {
         color: const Color(0xFF06498E),
         borderRadius: BorderRadius.circular(5),
         child: IconButton(
-          tooltip: expanded ? 'Collapse sidebar' : 'Open navigation menu',
+          tooltip: expanded
+              ? context.l10n.collapseSidebar
+              : context.l10n.openNavigationMenu,
           constraints: const BoxConstraints.tightFor(width: 34, height: 34),
           padding: EdgeInsets.zero,
           icon: const Icon(Icons.menu, color: Colors.white, size: 20),
@@ -162,6 +166,7 @@ class _SidebarContents extends StatelessWidget {
         children: expanded
             ? [
                 _header(
+                  context: context,
                   name: user?.name ?? 'Mpuza',
                   email: user?.email,
                   onToggle: onToggle,
@@ -169,58 +174,58 @@ class _SidebarContents extends StatelessWidget {
                 _item(
                   context,
                   icon: Icons.home,
-                  title: 'Home',
+                  title: context.l10n.home,
                   route: AppRoutes.home,
                 ),
                 _item(
                   context,
                   icon: Icons.translate,
-                  title: 'Text Translation',
+                  title: context.l10n.textTranslation,
                   route: AppRoutes.textTranslation,
                 ),
                 _item(
                   context,
                   icon: Icons.mic,
-                  title: 'Speech Translation',
+                  title: context.l10n.speechTranslation,
                   route: AppRoutes.speechTranslation,
                 ),
                 _item(
                   context,
                   icon: Icons.video_library,
-                  title: 'Video Translation',
+                  title: context.l10n.videoTranslation,
                   route: AppRoutes.videoTranslation,
                 ),
                 _item(
                   context,
                   icon: Icons.camera_alt,
-                  title: 'Camera Translation',
+                  title: context.l10n.cameraTranslation,
                   route: AppRoutes.cameraTranslation,
                 ),
                 _item(
                   context,
                   icon: Icons.school,
-                  title: 'Education Tools',
-                  subtitle: 'Under Development',
+                  title: context.l10n.educationTools,
+                  subtitle: context.l10n.underDevelopment,
                   route: AppRoutes.educationTools,
                 ),
                 _item(
                   context,
                   icon: Icons.offline_bolt,
-                  title: 'Offline Packs',
-                  subtitle: 'Under Development',
+                  title: context.l10n.offlinePacks,
+                  subtitle: context.l10n.underDevelopment,
                   route: AppRoutes.offlinePacks,
                 ),
                 _item(
                   context,
                   icon: Icons.motorcycle,
-                  title: 'Driver Mode',
-                  subtitle: 'Under Development',
+                  title: context.l10n.driverMode,
+                  subtitle: context.l10n.underDevelopment,
                   route: AppRoutes.driverMode,
                 ),
                 _item(
                   context,
                   icon: Icons.map,
-                  title: 'Google Maps',
+                  title: context.l10n.googleMaps,
                   route: AppRoutes.maps,
                 ),
                 Divider(
@@ -232,17 +237,17 @@ class _SidebarContents extends StatelessWidget {
                 _item(
                   context,
                   icon: Icons.settings,
-                  title: 'Settings',
+                  title: context.l10n.settings,
                   route: AppRoutes.settings,
                 ),
                 _actionItem(
                   icon: Icons.info,
-                  title: 'About',
+                  title: context.l10n.about,
                   onTap: () => _showAboutDialog(context),
                 ),
                 _actionItem(
                   icon: Icons.logout,
-                  title: 'Log out',
+                  title: context.l10n.logOut,
                   onTap: () => _logout(context),
                 ),
               ]
@@ -252,7 +257,7 @@ class _SidebarContents extends StatelessWidget {
                     color: const Color(0xFF06498E),
                     borderRadius: BorderRadius.circular(5),
                     child: IconButton(
-                      tooltip: 'Open navigation menu',
+                      tooltip: context.l10n.openNavigationMenu,
                       constraints:
                           const BoxConstraints.tightFor(width: 34, height: 34),
                       padding: EdgeInsets.zero,
@@ -271,6 +276,7 @@ class _SidebarContents extends StatelessWidget {
   }
 
   Widget _header({
+    required BuildContext context,
     required String name,
     required String? email,
     required VoidCallback onToggle,
@@ -294,7 +300,7 @@ class _SidebarContents extends StatelessWidget {
                 ),
                 const Spacer(),
                 IconButton(
-                  tooltip: 'Collapse sidebar',
+                  tooltip: context.l10n.collapseSidebar,
                   constraints:
                       const BoxConstraints.tightFor(width: 34, height: 34),
                   padding: EdgeInsets.zero,
@@ -319,15 +325,15 @@ class _SidebarContents extends StatelessWidget {
               ),
             ),
             Text(
-              email ?? 'Rwanda • Africa • World',
+              email ?? context.l10n.rwandaAfricaWorld,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(color: Colors.white70, fontSize: 14),
             ),
             if (email != null)
-              const Text(
-                'Rwanda • Africa • World',
-                style: TextStyle(color: Colors.white70, fontSize: 12),
+              Text(
+                context.l10n.rwandaAfricaWorld,
+                style: const TextStyle(color: Colors.white70, fontSize: 12),
               ),
           ],
         ),
@@ -462,7 +468,7 @@ class _SidebarContents extends StatelessWidget {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('About'),
+        title: Text(context.l10n.about),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -485,13 +491,16 @@ class _SidebarContents extends StatelessWidget {
               'Mpuza',
               style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
             ),
-            const Text('Version 1.0.0', style: TextStyle(color: Colors.grey)),
+            Text(
+              context.l10n.version,
+              style: const TextStyle(color: Colors.grey),
+            ),
             const SizedBox(height: 16),
-            const Text(
-              'Breaking language barriers in Rwanda, Africa & World.\n\n'
-              'Supporting Kinyarwanda, English, and French.\n\n'
-              '🇷🇼 Made with pride in Rwanda 🇷🇼\n\n'
-              'Developed by Prime Data Consulting Group LTD',
+            Text(
+              '${context.l10n.aboutBlurb}\n\n'
+              '${context.l10n.supportedLanguages}\n\n'
+              '${context.l10n.madeWithPride}\n\n'
+              '${context.l10n.developedByCompany}',
               textAlign: TextAlign.center,
             ),
           ],
@@ -499,7 +508,7 @@ class _SidebarContents extends StatelessWidget {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('OK'),
+            child: Text(context.l10n.ok),
           ),
         ],
       ),

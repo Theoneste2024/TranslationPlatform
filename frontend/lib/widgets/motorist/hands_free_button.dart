@@ -20,7 +20,7 @@ class HandsFreeButton extends StatelessWidget {
         color: isListening ? Colors.red : Colors.blue,
         boxShadow: [
           BoxShadow(
-            color: (isListening ? Colors.red : Colors.blue).withOpacity(0.3),
+            color: (isListening ? Colors.red : Colors.blue).withValues(alpha: 0.3),
             blurRadius: 10,
             spreadRadius: 2,
           ),

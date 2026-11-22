@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 
+import '../../l10n/app_localizations_extensions.dart';
 import '../../providers/auth_provider.dart';
 
 enum _AuthStage {
@@ -109,6 +110,10 @@ class _AuthScreenState extends State<AuthScreen> {
         children: [
           LayoutBuilder(
             builder: (context, constraints) {
+              if (constraints.maxWidth <= 36 || constraints.maxHeight <= 0) {
+                return const SizedBox.shrink();
+              }
+
               final isMobile = constraints.maxWidth < 600;
               final cardWidth = math.min(constraints.maxWidth - 36, 400.0);
 
@@ -277,11 +282,11 @@ class _AuthScreenState extends State<AuthScreen> {
       minHeight: minHeight,
       compact: compact,
       content: [
-        Text('Welcome back', style: _titleStyle),
+        Text(context.l10n.welcomeBack, style: _titleStyle),
         const SizedBox(height: 4),
-        const Text(
-          'Login to continue translating.',
-          style: TextStyle(color: _muted, fontSize: 14),
+        Text(
+          context.l10n.loginToContinue,
+          style: const TextStyle(color: _muted, fontSize: 14),
         ),
         const SizedBox(height: 20),
         Form(
@@ -289,7 +294,7 @@ class _AuthScreenState extends State<AuthScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              _fieldLabel('Email or username'),
+              _fieldLabel(context.l10n.emailOrUsername),
               _textField(
                 controller: _loginController,
                 hint: 'jean_claude',
@@ -299,10 +304,10 @@ class _AuthScreenState extends State<AuthScreen> {
                 key: const ValueKey('login-identifier'),
               ),
               const SizedBox(height: 18),
-              _fieldLabel('Password'),
+              _fieldLabel(context.l10n.password),
               _textField(
                 controller: _loginPasswordController,
-                hint: 'Enter your password',
+                hint: context.l10n.enterPassword,
                 icon: Icons.lock_outline,
                 obscureText: !_isLoginPasswordVisible,
                 validator: _requiredValidator,
@@ -310,8 +315,8 @@ class _AuthScreenState extends State<AuthScreen> {
                 key: const ValueKey('login-password'),
                 suffix: IconButton(
                   tooltip: _isLoginPasswordVisible
-                      ? 'Hide password'
-                      : 'Show password',
+                      ? context.l10n.hidePassword
+                      : context.l10n.showPassword,
                   onPressed: () => setState(
                     () => _isLoginPasswordVisible = !_isLoginPasswordVisible,
                   ),
@@ -334,7 +339,7 @@ class _AuthScreenState extends State<AuthScreen> {
                     tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                   ),
                   child: Text(
-                    'Forgot password?',
+                    context.l10n.forgotPassword,
                     style: GoogleFonts.inter(
                       color: _blue,
                       fontSize: 12,
@@ -350,14 +355,14 @@ class _AuthScreenState extends State<AuthScreen> {
       footer: Column(
         children: [
           _primaryButton(
-            label: 'Login',
+            label: context.l10n.login,
             onPressed: _isAuthLoading ? null : _submitLogin,
             key: const ValueKey('login-submit'),
           ),
           const SizedBox(height: 12),
           _inlineLink(
-            lead: 'New to MPUZA? ',
-            action: 'Create account',
+            lead: context.l10n.newToMpuza,
+            action: context.l10n.createAccount,
             onTap: () => setState(() => _stage = _AuthStage.signupDetails),
           ),
         ],
@@ -372,13 +377,13 @@ class _AuthScreenState extends State<AuthScreen> {
       content: [
         _stepProgress(1),
         const SizedBox(height: 13),
-        Text('STEP 1 OF 2', style: _eyebrowStyle),
+        Text(context.l10n.signupStepOne, style: _eyebrowStyle),
         const SizedBox(height: 5),
-        Text('Create your account', style: _titleStyle),
+        Text(context.l10n.createAccount, style: _titleStyle),
         const SizedBox(height: 4),
-        const Text(
-          'Join MPUZA and start translating across languages.',
-          style: TextStyle(color: _muted, fontSize: 14),
+        Text(
+          context.l10n.joinMpuza,
+          style: const TextStyle(color: _muted, fontSize: 14),
         ),
         const SizedBox(height: 21),
         Form(
@@ -386,7 +391,7 @@ class _AuthScreenState extends State<AuthScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              _fieldLabel('Username'),
+              _fieldLabel(context.l10n.username),
               _textField(
                 controller: _usernameController,
                 hint: 'jean_claude',
@@ -396,7 +401,7 @@ class _AuthScreenState extends State<AuthScreen> {
                 key: const ValueKey('signup-username'),
               ),
               const SizedBox(height: 16),
-              _fieldLabel('Email address'),
+              _fieldLabel(context.l10n.emailAddress),
               _textField(
                 controller: _emailController,
                 hint: 'jean@example.com',
@@ -407,7 +412,7 @@ class _AuthScreenState extends State<AuthScreen> {
                   if (requiredError != null) return requiredError;
                   if (!RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$')
                       .hasMatch(value!.trim())) {
-                    return 'Enter a valid email address';
+                    return context.l10n.invalidEmailAddress;
                   }
                   return null;
                 },
@@ -415,7 +420,7 @@ class _AuthScreenState extends State<AuthScreen> {
                 key: const ValueKey('signup-email'),
               ),
               const SizedBox(height: 16),
-              _fieldLabel('Phone number'),
+              _fieldLabel(context.l10n.phoneNumber),
               _textField(
                 controller: _phoneController,
                 hint: '78 123 4567',
@@ -457,14 +462,14 @@ class _AuthScreenState extends State<AuthScreen> {
       footer: Column(
         children: [
           _primaryButton(
-            label: 'Continue',
+            label: context.l10n.continueLabel,
             onPressed: _continueToSignupSecurity,
             key: const ValueKey('signup-continue'),
           ),
           const SizedBox(height: 12),
           _inlineLink(
-            lead: 'Already have an account? ',
-            action: 'Login',
+            lead: context.l10n.alreadyHaveAccount,
+            action: context.l10n.login,
             onTap: () => setState(() => _stage = _AuthStage.login),
           ),
         ],
@@ -481,22 +486,22 @@ class _AuthScreenState extends State<AuthScreen> {
       content: [
         _stepProgress(2),
         const SizedBox(height: 13),
-        Text('STEP 2 OF 2', style: _eyebrowStyle),
+        Text(context.l10n.signupStepTwo, style: _eyebrowStyle),
         const SizedBox(height: 4),
-        Text('About you & security', style: _titleStyle),
+        Text(context.l10n.aboutYouAndSecurity, style: _titleStyle),
         const SizedBox(height: 12),
-        _fieldLabel('Gender'),
+        _fieldLabel(context.l10n.gender),
         Row(
           children: [
-            _genderChoice('Male'),
+            _genderChoice('Male', context.l10n.male),
             const SizedBox(width: 8),
-            _genderChoice('Female'),
+            _genderChoice('Female', context.l10n.female),
             const SizedBox(width: 8),
-            _genderChoice('Prefer not to say'),
+            _genderChoice('Prefer not to say', context.l10n.preferNotToSay),
           ],
         ),
         const SizedBox(height: 14),
-        _fieldLabel('Country'),
+        _fieldLabel(context.l10n.country),
         DropdownButtonFormField<String>(
           initialValue: _country,
           isExpanded: true,
@@ -504,21 +509,32 @@ class _AuthScreenState extends State<AuthScreen> {
             prefixIcon: const Icon(Icons.language, color: _muted, size: 20),
           ),
           icon: const Icon(Icons.keyboard_arrow_down, color: _muted),
-          items: const [
-            'Rwanda',
-            'Burundi',
-            'Democratic Republic of the Congo',
-            'Kenya',
-            'Tanzania',
-            'Uganda',
-          ]
-              .map(
-                (country) => DropdownMenuItem(
-                  value: country,
-                  child: Text(country, overflow: TextOverflow.ellipsis),
-                ),
-              )
-              .toList(),
+          items: [
+            DropdownMenuItem(
+              value: 'Rwanda',
+              child: Text(context.l10n.countryRwanda),
+            ),
+            DropdownMenuItem(
+              value: 'Burundi',
+              child: Text(context.l10n.countryBurundi),
+            ),
+            DropdownMenuItem(
+              value: 'Democratic Republic of the Congo',
+              child: Text(context.l10n.countryDrCongo),
+            ),
+            DropdownMenuItem(
+              value: 'Kenya',
+              child: Text(context.l10n.countryKenya),
+            ),
+            DropdownMenuItem(
+              value: 'Tanzania',
+              child: Text(context.l10n.countryTanzania),
+            ),
+            DropdownMenuItem(
+              value: 'Uganda',
+              child: Text(context.l10n.countryUganda),
+            ),
+          ],
           onChanged: (country) {
             if (country != null) setState(() => _country = country);
           },
@@ -529,10 +545,10 @@ class _AuthScreenState extends State<AuthScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              _fieldLabel('Password'),
+              _fieldLabel(context.l10n.password),
               _textField(
                 controller: _passwordController,
-                hint: 'Create a strong password',
+                hint: context.l10n.createStrongPassword,
                 icon: Icons.lock_outline,
                 obscureText: !_isPasswordVisible,
                 validator: _passwordValidator,
@@ -540,8 +556,9 @@ class _AuthScreenState extends State<AuthScreen> {
                 textInputAction: TextInputAction.next,
                 key: const ValueKey('signup-password'),
                 suffix: IconButton(
-                  tooltip:
-                      _isPasswordVisible ? 'Hide password' : 'Show password',
+                  tooltip: _isPasswordVisible
+                      ? context.l10n.hidePassword
+                      : context.l10n.showPassword,
                   onPressed: () =>
                       setState(() => _isPasswordVisible = !_isPasswordVisible),
                   icon: Icon(
@@ -555,17 +572,17 @@ class _AuthScreenState extends State<AuthScreen> {
               const SizedBox(height: 8),
               _passwordStrengthIndicator(_passwordController.text),
               const SizedBox(height: 13),
-              _fieldLabel('Confirm password'),
+              _fieldLabel(context.l10n.confirmPassword),
               _textField(
                 controller: _confirmPasswordController,
-                hint: 'Re-enter your password',
+                hint: context.l10n.reenterPassword,
                 icon: Icons.lock_outline,
                 obscureText: !_isConfirmPasswordVisible,
                 validator: (value) {
                   final requiredError = _requiredValidator(value);
                   if (requiredError != null) return requiredError;
                   if (value != _passwordController.text) {
-                    return 'Passwords do not match';
+                    return context.l10n.passwordsDoNotMatch;
                   }
                   return null;
                 },
@@ -574,8 +591,8 @@ class _AuthScreenState extends State<AuthScreen> {
                 key: const ValueKey('signup-confirm-password'),
                 suffix: IconButton(
                   tooltip: _isConfirmPasswordVisible
-                      ? 'Hide password'
-                      : 'Show password',
+                      ? context.l10n.hidePassword
+                      : context.l10n.showPassword,
                   onPressed: () => setState(
                     () =>
                         _isConfirmPasswordVisible = !_isConfirmPasswordVisible,
@@ -592,13 +609,13 @@ class _AuthScreenState extends State<AuthScreen> {
                   _confirmPasswordController.text ==
                       _passwordController.text) ...[
                 const SizedBox(height: 5),
-                const Row(
+                Row(
                   children: [
-                    Icon(Icons.check, color: _green, size: 15),
-                    SizedBox(width: 5),
+                    const Icon(Icons.check, color: _green, size: 15),
+                    const SizedBox(width: 5),
                     Text(
-                      'Passwords match',
-                      style: TextStyle(
+                      context.l10n.passwordsMatch,
+                      style: const TextStyle(
                         color: _green,
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
@@ -612,7 +629,7 @@ class _AuthScreenState extends State<AuthScreen> {
         ),
       ],
       footer: _primaryButton(
-        label: 'Create account',
+        label: context.l10n.createAccount,
         onPressed: _isSignupValid && !_isAuthLoading ? _createAccount : null,
         key: const ValueKey('signup-submit'),
       ),
@@ -634,7 +651,7 @@ class _AuthScreenState extends State<AuthScreen> {
               setState(() => _stage = _AuthStage.signupSecurity);
             },
             icon: const Icon(Icons.arrow_back, size: 20),
-            label: const Text('Back'),
+            label: Text(context.l10n.back),
             style: TextButton.styleFrom(
               foregroundColor: _navy,
               padding: EdgeInsets.zero,
@@ -647,13 +664,15 @@ class _AuthScreenState extends State<AuthScreen> {
         Center(child: _verificationIcon()),
         const SizedBox(height: 20),
         Text(
-          'Verify your email',
+          context.l10n.verifyYourEmail,
           textAlign: TextAlign.center,
           style: _titleStyle,
         ),
         const SizedBox(height: 5),
         Text(
-          'We sent a 6-digit code to\n${_maskedEmail(_emailController.text)}',
+          context.l10n.verificationCodeSentTo(
+            _maskedEmail(_emailController.text),
+          ),
           textAlign: TextAlign.center,
           style: const TextStyle(color: _muted, height: 1.35),
         ),
@@ -681,7 +700,7 @@ class _AuthScreenState extends State<AuthScreen> {
           TextSpan(
             style: const TextStyle(color: _muted, fontSize: 13),
             children: [
-              const TextSpan(text: 'Code expires in '),
+              TextSpan(text: context.l10n.codeExpiresInPrefix),
               TextSpan(
                 text: _formatDuration(_otpExpiresIn),
                 style: const TextStyle(
@@ -698,11 +717,11 @@ class _AuthScreenState extends State<AuthScreen> {
           TextSpan(
             style: const TextStyle(color: _muted, fontSize: 13),
             children: [
-              const TextSpan(text: "Didn't get it? "),
+              TextSpan(text: context.l10n.didntGetIt),
               TextSpan(
                 text: _resendIn > 0
-                    ? 'Resend in ${_formatDuration(_resendIn)}'
-                    : 'Resend code',
+                    ? context.l10n.resendIn(_formatDuration(_resendIn))
+                    : context.l10n.resendCode,
                 style: TextStyle(
                   color: _resendIn > 0 ? _blue.withValues(alpha: 0.65) : _blue,
                   fontWeight: FontWeight.w600,
@@ -716,21 +735,21 @@ class _AuthScreenState extends State<AuthScreen> {
           Center(
             child: TextButton(
               onPressed: _isAuthLoading ? null : _resendCode,
-              child: const Text('Resend code'),
+              child: Text(context.l10n.resendCode),
             ),
           ),
       ],
       footer: Column(
         children: [
           _primaryButton(
-            label: 'Verify',
+            label: context.l10n.verify,
             onPressed: _isAuthLoading ? null : _verifyCode,
             key: const ValueKey('verify-submit'),
           ),
           const SizedBox(height: 12),
           _inlineLink(
-            lead: 'Wrong email? ',
-            action: 'Change it',
+            lead: context.l10n.wrongEmail,
+            action: context.l10n.changeIt,
             onTap: () {
               _otpTimer?.cancel();
               setState(() => _stage = _AuthStage.signupDetails);
@@ -756,19 +775,19 @@ class _AuthScreenState extends State<AuthScreen> {
         const Center(child: _SuccessMark()),
         const SizedBox(height: 30),
         Text(
-          'Email verified!',
+          context.l10n.emailVerified,
           textAlign: TextAlign.center,
           style: _titleStyle,
         ),
         const SizedBox(height: 8),
-        const Text(
-          'Your MPUZA account is ready. Login with your email or username to start translating.',
+        Text(
+          context.l10n.accountReadyMessage,
           textAlign: TextAlign.center,
-          style: TextStyle(color: _muted, height: 1.45, fontSize: 14),
+          style: const TextStyle(color: _muted, height: 1.45, fontSize: 14),
         ),
       ],
       footer: _primaryButton(
-        label: 'Go to Login',
+        label: context.l10n.goToLogin,
         onPressed: () => setState(() => _stage = _AuthStage.login),
         key: const ValueKey('verified-login'),
       ),
@@ -780,11 +799,11 @@ class _AuthScreenState extends State<AuthScreen> {
       minHeight: minHeight,
       compact: compact,
       content: [
-        Text('Forgot password?', style: _titleStyle),
+        Text(context.l10n.forgotPassword, style: _titleStyle),
         const SizedBox(height: 5),
-        const Text(
-          'Enter the email address linked to your MPUZA account. We will send you a reset code.',
-          style: TextStyle(color: _muted, height: 1.4),
+        Text(
+          context.l10n.forgotPasswordInstructions,
+          style: const TextStyle(color: _muted, height: 1.4),
         ),
         const SizedBox(height: 22),
         Form(
@@ -792,7 +811,7 @@ class _AuthScreenState extends State<AuthScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              _fieldLabel('Email address'),
+              _fieldLabel(context.l10n.emailAddress),
               _textField(
                 controller: _recoveryEmailController,
                 hint: 'jean@example.com',
@@ -809,14 +828,14 @@ class _AuthScreenState extends State<AuthScreen> {
       footer: Column(
         children: [
           _primaryButton(
-            label: 'Send reset code',
+            label: context.l10n.sendResetCode,
             onPressed: _isAuthLoading ? null : _requestPasswordReset,
             key: const ValueKey('recovery-request'),
           ),
           const SizedBox(height: 12),
           _inlineLink(
-            lead: 'Remember your password? ',
-            action: 'Login',
+            lead: context.l10n.rememberPassword,
+            action: context.l10n.login,
             onTap: () => setState(() => _stage = _AuthStage.login),
           ),
         ],
@@ -834,7 +853,7 @@ class _AuthScreenState extends State<AuthScreen> {
           child: TextButton.icon(
             onPressed: () => setState(() => _stage = _AuthStage.forgotPassword),
             icon: const Icon(Icons.arrow_back, size: 20),
-            label: const Text('Back'),
+            label: Text(context.l10n.back),
             style: TextButton.styleFrom(
               foregroundColor: _navy,
               padding: EdgeInsets.zero,
@@ -847,13 +866,15 @@ class _AuthScreenState extends State<AuthScreen> {
         Center(child: _verificationIcon()),
         const SizedBox(height: 12),
         Text(
-          'Reset your password',
+          context.l10n.resetYourPassword,
           textAlign: TextAlign.center,
           style: _titleStyle,
         ),
         const SizedBox(height: 5),
         Text(
-          'Enter the code sent to\n${_maskedEmail(_recoveryEmailController.text)}',
+          context.l10n.resetCodeSentTo(
+            _maskedEmail(_recoveryEmailController.text),
+          ),
           textAlign: TextAlign.center,
           style: const TextStyle(color: _muted, height: 1.35),
         ),
@@ -875,7 +896,8 @@ class _AuthScreenState extends State<AuthScreen> {
         ),
         const SizedBox(height: 8),
         Text(
-          'Code expires in ${_formatDuration(_otpExpiresIn)}',
+          '${context.l10n.codeExpiresInPrefix}'
+          '${_formatDuration(_otpExpiresIn)}',
           textAlign: TextAlign.center,
           style: const TextStyle(color: _muted, fontSize: 13),
         ),
@@ -885,8 +907,8 @@ class _AuthScreenState extends State<AuthScreen> {
                 _resendIn == 0 && !_isAuthLoading ? _resendResetCode : null,
             child: Text(
               _resendIn == 0
-                  ? 'Resend code'
-                  : 'Resend in ${_formatDuration(_resendIn)}',
+                  ? context.l10n.resendCode
+                  : context.l10n.resendIn(_formatDuration(_resendIn)),
             ),
           ),
         ),
@@ -895,10 +917,10 @@ class _AuthScreenState extends State<AuthScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              _fieldLabel('New password'),
+              _fieldLabel(context.l10n.newPassword),
               _textField(
                 controller: _resetPasswordController,
-                hint: 'Create a strong password',
+                hint: context.l10n.createStrongPassword,
                 icon: Icons.lock_outline,
                 obscureText: !_isPasswordVisible,
                 validator: _passwordValidator,
@@ -906,8 +928,9 @@ class _AuthScreenState extends State<AuthScreen> {
                 textInputAction: TextInputAction.next,
                 key: const ValueKey('recovery-password'),
                 suffix: IconButton(
-                  tooltip:
-                      _isPasswordVisible ? 'Hide password' : 'Show password',
+                  tooltip: _isPasswordVisible
+                      ? context.l10n.hidePassword
+                      : context.l10n.showPassword,
                   onPressed: () =>
                       setState(() => _isPasswordVisible = !_isPasswordVisible),
                   icon: Icon(
@@ -921,17 +944,17 @@ class _AuthScreenState extends State<AuthScreen> {
               const SizedBox(height: 8),
               _passwordStrengthIndicator(_resetPasswordController.text),
               const SizedBox(height: 12),
-              _fieldLabel('Confirm new password'),
+              _fieldLabel(context.l10n.confirmNewPassword),
               _textField(
                 controller: _resetConfirmPasswordController,
-                hint: 'Re-enter your password',
+                hint: context.l10n.reenterPassword,
                 icon: Icons.lock_outline,
                 obscureText: !_isConfirmPasswordVisible,
                 validator: (value) {
                   final requiredError = _requiredValidator(value);
                   if (requiredError != null) return requiredError;
                   if (value != _resetPasswordController.text) {
-                    return 'Passwords do not match';
+                    return context.l10n.passwordsDoNotMatch;
                   }
                   return null;
                 },
@@ -940,8 +963,8 @@ class _AuthScreenState extends State<AuthScreen> {
                 key: const ValueKey('recovery-confirm-password'),
                 suffix: IconButton(
                   tooltip: _isConfirmPasswordVisible
-                      ? 'Hide password'
-                      : 'Show password',
+                      ? context.l10n.hidePassword
+                      : context.l10n.showPassword,
                   onPressed: () => setState(
                     () =>
                         _isConfirmPasswordVisible = !_isConfirmPasswordVisible,
@@ -959,7 +982,7 @@ class _AuthScreenState extends State<AuthScreen> {
         ),
       ],
       footer: _primaryButton(
-        label: 'Reset password',
+        label: context.l10n.resetPassword,
         onPressed: _isAuthLoading ? null : _resetPassword,
         key: const ValueKey('recovery-reset'),
       ),
@@ -995,7 +1018,7 @@ class _AuthScreenState extends State<AuthScreen> {
     );
   }
 
-  Widget _genderChoice(String gender) {
+  Widget _genderChoice(String gender, String label) {
     final selected = _gender == gender;
     return Expanded(
       child: SizedBox(
@@ -1014,7 +1037,7 @@ class _AuthScreenState extends State<AuthScreen> {
             ),
           ),
           child: Text(
-            gender == 'Prefer not to say' ? 'Prefer not\nto say' : gender,
+            label,
             textAlign: TextAlign.center,
             style: GoogleFonts.inter(fontSize: 12),
           ),
@@ -1033,10 +1056,10 @@ class _AuthScreenState extends State<AuthScreen> {
     ];
     final strength = checks.where((check) => check).length;
     final strengthLabel = strength < 2
-        ? 'Weak'
+        ? context.l10n.weak
         : strength < 4
-            ? 'Fair'
-            : 'Strong';
+            ? context.l10n.fair
+            : context.l10n.strong;
     final strengthColor = strength < 2
         ? const Color(0xFFB34343)
         : strength < 4
@@ -1066,9 +1089,9 @@ class _AuthScreenState extends State<AuthScreen> {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            const Text(
-              'Password strength',
-              style: TextStyle(color: _muted, fontSize: 11),
+            Text(
+              context.l10n.passwordStrength,
+              style: const TextStyle(color: _muted, fontSize: 11),
             ),
             Text(
               strengthLabel,
@@ -1085,15 +1108,15 @@ class _AuthScreenState extends State<AuthScreen> {
           children: [
             Row(
               children: [
-                _passwordCheck('8+ characters', checks[0]),
-                _passwordCheck('Uppercase', checks[1]),
+                _passwordCheck(context.l10n.eightPlusCharacters, checks[0]),
+                _passwordCheck(context.l10n.uppercase, checks[1]),
               ],
             ),
             const SizedBox(height: 4),
             Row(
               children: [
-                _passwordCheck('Lowercase', checks[2]),
-                _passwordCheck('Number & symbol', checks[3]),
+                _passwordCheck(context.l10n.lowercase, checks[2]),
+                _passwordCheck(context.l10n.numberAndSymbol, checks[3]),
               ],
             ),
           ],
@@ -1377,7 +1400,9 @@ class _AuthScreenState extends State<AuthScreen> {
   }
 
   String? _requiredValidator(String? value) {
-    if (value == null || value.trim().isEmpty) return 'This field is required';
+    if (value == null || value.trim().isEmpty) {
+      return context.l10n.requiredField;
+    }
     return null;
   }
 
@@ -1385,19 +1410,19 @@ class _AuthScreenState extends State<AuthScreen> {
     final requiredError = _requiredValidator(value);
     if (requiredError != null) return requiredError;
     if (!RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(value!.trim())) {
-      return 'Enter a valid email address';
+      return context.l10n.invalidEmailAddress;
     }
     return null;
   }
 
   String? _passwordValidator(String? value) {
-    if (value == null || value.isEmpty) return 'This field is required';
+    if (value == null || value.isEmpty) return context.l10n.requiredField;
     if (value.length < 8 ||
         !RegExp(r'[A-Z]').hasMatch(value) ||
         !RegExp(r'[a-z]').hasMatch(value) ||
         !RegExp(r'[0-9]').hasMatch(value) ||
         !RegExp(r'[^A-Za-z0-9]').hasMatch(value)) {
-      return 'Use 8+ characters with uppercase, lowercase, a number and a symbol';
+      return context.l10n.passwordStrengthRequirement;
     }
     return null;
   }
@@ -1410,7 +1435,7 @@ class _AuthScreenState extends State<AuthScreen> {
 
   Future<void> _createAccount() async {
     if (_gender.isEmpty) {
-      _showMessage('Select a gender option to continue.');
+      _showMessage(context.l10n.selectGender);
       return;
     }
     if (!(_signupSecurityKey.currentState?.validate() ?? false)) return;
@@ -1447,7 +1472,7 @@ class _AuthScreenState extends State<AuthScreen> {
   Future<void> _verifyCode() async {
     final code = _otpControllers.map((controller) => controller.text).join();
     if (code.length != 6) {
-      _showMessage('Enter the 6-digit code to continue.');
+      _showMessage(context.l10n.enterSixDigitCode);
       return;
     }
     final verified = await _performAuth(
@@ -1495,7 +1520,7 @@ class _AuthScreenState extends State<AuthScreen> {
     if (!(_resetPasswordKey.currentState?.validate() ?? false)) return;
     final code = _otpControllers.map((controller) => controller.text).join();
     if (code.length != 6) {
-      _showMessage('Enter the 6-digit code to continue.');
+      _showMessage(context.l10n.enterSixDigitCode);
       return;
     }
     final reset = await _performAuth(
@@ -1514,7 +1539,7 @@ class _AuthScreenState extends State<AuthScreen> {
       controller.clear();
     }
     setState(() => _stage = _AuthStage.login);
-    _showMessage('Password reset. You can now log in.');
+    _showMessage(context.l10n.passwordResetComplete);
   }
 
   Future<void> _resendCode() async {

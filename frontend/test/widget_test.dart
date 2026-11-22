@@ -3,10 +3,14 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:dio/dio.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:translation_platform/l10n/app_localizations_extensions.dart';
+import 'package:translation_platform/l10n/generated/app_localizations.dart';
 import 'package:translation_platform/screens/auth/auth_screen.dart';
 import 'package:translation_platform/providers/auth_provider.dart';
 import 'package:translation_platform/screens/home/home_screen.dart';
+import 'package:translation_platform/widgets/app_header.dart';
 import 'package:translation_platform/widgets/app_sidebar.dart';
+import 'package:translation_platform/main.dart' as app;
 
 void expectLoginBlueButton(
   WidgetTester tester,
@@ -23,6 +27,115 @@ void expectLoginBlueButton(
 }
 
 void main() {
+  testWidgets('Kinyarwanda locale retains Flutter material localizations',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({
+      'auth_access_token': 'test-token',
+      'auth_token_expiry':
+          DateTime.now().add(const Duration(hours: 1)).millisecondsSinceEpoch,
+      'auth_username': 'jean_claude',
+      'auth_email': 'jean@example.com',
+    });
+    final provider = AuthProvider(dio: _fakeAuthDio());
+    await provider.restoreSession();
+
+    await tester.pumpWidget(
+      MultiProvider(
+        providers: [
+          ChangeNotifierProvider<AuthProvider>.value(value: provider),
+          ChangeNotifierProvider(create: (_) => AppSidebarController()),
+        ],
+        child: const app.MyApp(),
+      ),
+    );
+
+    await tester.tap(find.byTooltip('Select language'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('French'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Choisir la langue'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Kinyarwanda'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Tangira gusemura'), findsOneWidget);
+    expect(provider.systemLanguage, 'rw');
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('language selector changes the displayed interface language',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({
+      'auth_access_token': 'test-token',
+      'auth_token_expiry':
+          DateTime.now().add(const Duration(hours: 1)).millisecondsSinceEpoch,
+      'auth_username': 'jean_claude',
+      'auth_email': 'jean@example.com',
+    });
+    final provider = AuthProvider(dio: _fakeAuthDio());
+    await provider.restoreSession();
+
+    await tester.pumpWidget(
+      ChangeNotifierProvider<AuthProvider>.value(
+        value: provider,
+        child: Consumer<AuthProvider>(
+          builder: (context, auth, _) => MaterialApp(
+            locale: Locale(auth.systemLanguage),
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            home: Scaffold(
+              appBar: AppBar(actions: const [AppLanguageSelector()]),
+              body: Builder(
+                builder: (context) => Text(context.l10n.home),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('Home'), findsOneWidget);
+    await tester.tap(find.byTooltip('Select language'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('French'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Accueil'), findsOneWidget);
+    expect(provider.systemLanguage, 'fr');
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('home logo is beside the sidebar menu', (tester) async {
+    tester.view.physicalSize = const Size(1440, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      ChangeNotifierProvider<AuthProvider>.value(
+        value: _TestAuthProvider(),
+        child: const MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: HomeScreen(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final menuPosition =
+        tester.getCenter(find.byTooltip('Open navigation menu'));
+    final logoPosition = tester.getCenter(find.byType(AppBrandLogo));
+    final languagePosition =
+        tester.getCenter(find.byTooltip('Select language'));
+
+    expect(logoPosition.dx, greaterThan(menuPosition.dx));
+    expect(logoPosition.dx - menuPosition.dx, lessThan(60));
+    expect(languagePosition.dx, greaterThan(logoPosition.dx));
+    expect((logoPosition.dy - menuPosition.dy).abs(), lessThan(4));
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('auth flow starts at login and opens signup', (tester) async {
     tester.view.physicalSize = const Size(430, 900);
     tester.view.devicePixelRatio = 1;
@@ -32,13 +145,13 @@ void main() {
     await _pumpAuthApp(tester);
 
     expect(find.text('Welcome back'), findsOneWidget);
-    expect(find.text('Login'), findsOneWidget);
+    expect(find.text('Log in'), findsOneWidget);
     expectLoginBlueButton(tester, const ValueKey('login-submit'));
 
     await tester.tap(find.text('Create account'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Create your account'), findsOneWidget);
+    expect(find.text('Create account'), findsOneWidget);
     expect(find.text('STEP 1 OF 2'), findsOneWidget);
     expectLoginBlueButton(tester, const ValueKey('signup-continue'));
     expect(tester.takeException(), isNull);
@@ -84,6 +197,19 @@ void main() {
       expect(find.text('Welcome back'), findsOneWidget);
       expect(tester.takeException(), isNull, reason: 'Viewport $size');
     }
+  });
+
+  testWidgets('auth layout handles a zero-sized startup viewport',
+      (tester) async {
+    tester.view.physicalSize = Size.zero;
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await _pumpAuthApp(tester);
+    await tester.pump();
+
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('signup can preview the OTP and verified screens',
@@ -270,7 +396,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('home profile shows the signed-in user and logs out',
+  testWidgets('home landing page shows the localized translation action',
       (tester) async {
     tester.view.physicalSize = const Size(390, 844);
     tester.view.devicePixelRatio = 1;
@@ -281,25 +407,15 @@ void main() {
     await tester.pumpWidget(
       ChangeNotifierProvider<AuthProvider>.value(
         value: provider,
-        child: const MaterialApp(home: HomeScreen()),
+        child: const MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: HomeScreen(),
+        ),
       ),
     );
 
-    expect(find.text('J'), findsOneWidget);
-    final avatarPosition = tester.getCenter(
-      find.byKey(const ValueKey('profile-avatar')),
-    );
-    expect(avatarPosition.dx, greaterThan(tester.view.physicalSize.width / 2));
-    await tester.tap(find.byKey(const ValueKey('profile-menu')));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 500));
-    expect(find.text('jean_claude'), findsOneWidget);
-    expect(find.text('jean@example.com'), findsOneWidget);
-
-    await tester.tap(find.text('Log out'));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 500));
-    expect(provider.isAuthenticated, isFalse);
+    expect(find.text('Start Translating'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -318,6 +434,8 @@ void main() {
           ChangeNotifierProvider(create: (_) => AppSidebarController()),
         ],
         child: MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
           home: Consumer<AuthProvider>(
             builder: (context, auth, _) => auth.isAuthenticated
                 ? const _AuthenticatedTestHome()
@@ -357,7 +475,11 @@ Future<void> _pumpAuthApp(WidgetTester tester) async {
   await tester.pumpWidget(
     ChangeNotifierProvider(
       create: (_) => AuthProvider(dio: _fakeAuthDio()),
-      child: const MaterialApp(home: AuthScreen()),
+      child: const MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: AuthScreen(),
+      ),
     ),
   );
 }
@@ -368,6 +490,13 @@ Dio _fakeAuthDio() {
     InterceptorsWrapper(
       onRequest: (options, handler) {
         final response = switch (options.path) {
+          '/api/users/me/system-language' => (
+              200,
+              {
+                'system_language':
+                    (options.data as Map<String, dynamic>)['system_language'],
+              },
+            ),
           '/api/users/signup' => (
               201,
               {

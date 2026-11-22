@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
 import '../../providers/offline_provider.dart';
 import '../../core/constants/languages.dart';
+import '../../l10n/app_localizations_extensions.dart';
 import '../../widgets/app_header.dart';
 import '../../widgets/app_sidebar.dart';
 
@@ -81,7 +83,7 @@ class _OfflinePacksScreenState extends State<OfflinePacksScreen> {
     return AppPageShell(
       child: Scaffold(
         appBar: AppBar(
-          title: const Text('Offline Translation Packs'),
+          title: Text(context.l10n.offlineTranslationPacks),
           elevation: 0,
           leading: const AppMenuButton(),
           automaticallyImplyLeading: false,
@@ -137,9 +139,9 @@ class _OfflinePacksScreenState extends State<OfflinePacksScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text(
-                          'Device Storage',
-                          style: TextStyle(fontWeight: FontWeight.bold),
+                        Text(
+                          context.l10n.deviceStorage,
+                          style: const TextStyle(fontWeight: FontWeight.bold),
                         ),
                         const SizedBox(height: 4),
                         LinearProgressIndicator(
@@ -151,7 +153,7 @@ class _OfflinePacksScreenState extends State<OfflinePacksScreen> {
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          '245 MB used • 2.1 GB free',
+                          context.l10n.storageUsage('245 MB', '2.1 GB'),
                           style: TextStyle(
                             color: Colors.grey.shade600,
                             fontSize: 12,
@@ -171,9 +173,9 @@ class _OfflinePacksScreenState extends State<OfflinePacksScreen> {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Text(
-                      'My Packs',
-                      style: TextStyle(
+                    Text(
+                      context.l10n.myPacks,
+                      style: const TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
                       ),
@@ -182,7 +184,7 @@ class _OfflinePacksScreenState extends State<OfflinePacksScreen> {
                       onPressed: () {
                         // Show all downloaded packs
                       },
-                      child: const Text('View All'),
+                      child: Text(context.l10n.viewAll),
                     ),
                   ],
                 ),
@@ -195,6 +197,8 @@ class _OfflinePacksScreenState extends State<OfflinePacksScreen> {
                 itemCount: _availablePacks.length,
                 itemBuilder: (context, index) {
                   final pack = _availablePacks[index];
+                  final packName = _packName(context, pack);
+                  final packDescription = _packDescription(context, pack);
                   final isDownloaded =
                       offlineProvider.isPackDownloaded(pack.id);
 
@@ -215,7 +219,7 @@ class _OfflinePacksScreenState extends State<OfflinePacksScreen> {
                                 decoration: BoxDecoration(
                                   color: Theme.of(context)
                                       .primaryColor
-                                      .withOpacity(0.1),
+                                      .withValues(alpha: 0.1),
                                   borderRadius: BorderRadius.circular(12),
                                 ),
                                 child: Icon(
@@ -230,7 +234,7 @@ class _OfflinePacksScreenState extends State<OfflinePacksScreen> {
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text(
-                                      pack.name,
+                                      packName,
                                       style: const TextStyle(
                                         fontWeight: FontWeight.bold,
                                         fontSize: 16,
@@ -238,7 +242,7 @@ class _OfflinePacksScreenState extends State<OfflinePacksScreen> {
                                     ),
                                     const SizedBox(height: 4),
                                     Text(
-                                      pack.description,
+                                      packDescription,
                                       style: TextStyle(
                                         color: Colors.grey.shade600,
                                         fontSize: 13,
@@ -346,7 +350,7 @@ class _OfflinePacksScreenState extends State<OfflinePacksScreen> {
                                       ),
                                       const SizedBox(width: 4),
                                       Text(
-                                        'Free',
+                                        context.l10n.free,
                                         style: TextStyle(
                                           color: Colors.blue.shade700,
                                           fontWeight: FontWeight.bold,
@@ -376,7 +380,7 @@ class _OfflinePacksScreenState extends State<OfflinePacksScreen> {
                                       ),
                                       const SizedBox(width: 4),
                                       Text(
-                                        'Downloaded',
+                                        context.l10n.downloaded,
                                         style: TextStyle(
                                           color: Colors.green.shade700,
                                           fontWeight: FontWeight.w500,
@@ -392,9 +396,7 @@ class _OfflinePacksScreenState extends State<OfflinePacksScreen> {
                                     _downloadPack(context, pack);
                                   },
                                   icon: const Icon(Icons.download, size: 18),
-                                  label: const Text(
-                                    'Download', // All packs are free now
-                                  ),
+                                  label: Text(context.l10n.download),
                                   style: ElevatedButton.styleFrom(
                                     backgroundColor:
                                         Theme.of(context).primaryColor,
@@ -435,11 +437,13 @@ class _OfflinePacksScreenState extends State<OfflinePacksScreen> {
     offlineProvider.downloadPack(pack.id);
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('Downloading ${pack.name}...'),
+        content: Text(
+          context.l10n.downloadingPack(_packName(context, pack)),
+        ),
         backgroundColor: Theme.of(context).primaryColor,
         duration: const Duration(seconds: 2),
         action: SnackBarAction(
-          label: 'Cancel',
+          label: context.l10n.cancel,
           textColor: Colors.white,
           onPressed: () {
             offlineProvider.cancelDownload(pack.id);
@@ -448,6 +452,44 @@ class _OfflinePacksScreenState extends State<OfflinePacksScreen> {
       ),
     );
     // }
+  }
+
+  String _packName(BuildContext context, OfflinePack pack) {
+    switch (pack.id) {
+      case 'basic_rw':
+        return context.l10n.basicKinyarwandaPack;
+      case 'complete_rw':
+        return context.l10n.completeKinyarwandaPack;
+      case 'motorist_rw':
+        return context.l10n.motoristCommunicationPack;
+      case 'medical_rw':
+        return context.l10n.medicalEmergencyPack;
+      case 'education_rw':
+        return context.l10n.educationPack;
+      case 'tourism_rw':
+        return context.l10n.tourismHospitalityPack;
+      default:
+        return pack.name;
+    }
+  }
+
+  String _packDescription(BuildContext context, OfflinePack pack) {
+    switch (pack.id) {
+      case 'basic_rw':
+        return context.l10n.essentialPhrasesDescription;
+      case 'complete_rw':
+        return context.l10n.completeDictionaryDescription;
+      case 'motorist_rw':
+        return context.l10n.transportationPhrasesDescription;
+      case 'medical_rw':
+        return context.l10n.healthcareVocabularyDescription;
+      case 'education_rw':
+        return context.l10n.academicVocabularyDescription;
+      case 'tourism_rw':
+        return context.l10n.tourismPhrasesDescription;
+      default:
+        return pack.description;
+    }
   }
 
   // 💰 PAYMENT METHODS - COMMENTED OUT FOR NOW

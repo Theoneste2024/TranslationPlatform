@@ -1,0 +1,578 @@
+{
+  "@@locale": "en",
+  "appTitle": "Mpuza - Rwanda",
+  "retry": "Retry",
+  "continueToLogin": "Continue to Login",
+  "selectLanguage": "Select language",
+  "languageEnglish": "English",
+  "languageKinyarwanda": "Kinyarwanda",
+  "languageFrench": "French",
+  "languageUpdateFailed": "Could not change language: {error}",
+  "@languageUpdateFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "openNavigationMenu": "Open navigation menu",
+  "collapseSidebar": "Collapse sidebar",
+  "home": "Home",
+  "textTranslation": "Text Translation",
+  "speechTranslation": "Speech Translation",
+  "videoTranslation": "Video Translation",
+  "cameraTranslation": "Camera Translation",
+  "startTranslating": "Start Translating",
+  "educationTools": "Education Tools",
+  "underDevelopment": "Under Development",
+  "offlinePacks": "Offline Packs",
+  "driverMode": "Driver Mode",
+  "googleMaps": "Google Maps",
+  "settings": "Settings",
+  "about": "About",
+  "aboutBlurb": "Breaking language barriers in Rwanda, Africa & World.",
+  "supportedLanguages": "Supporting Kinyarwanda, English, and French.",
+  "madeWithPride": "🇷🇼 Made with pride in Rwanda 🇷🇼",
+  "logOut": "Log out",
+  "ok": "OK",
+  "version": "Version 1.0.0",
+  "settingsTitle": "App Settings",
+  "darkMode": "Dark Mode",
+  "enableDarkTheme": "Enable dark theme",
+  "defaultLanguage": "Default Language",
+  "speechRate": "Speech Rate",
+  "normal": "Normal",
+  "clearCache": "Clear Cache",
+  "cacheUsage": "{size} used",
+  "@cacheUsage": {
+    "placeholders": {
+      "size": {
+        "type": "String"
+      }
+    }
+  },
+  "welcomeBack": "Welcome back",
+  "loginToContinue": "Log in to continue translating.",
+  "emailOrUsername": "Email or username",
+  "password": "Password",
+  "enterPassword": "Enter your password",
+  "hidePassword": "Hide password",
+  "showPassword": "Show password",
+  "forgotPassword": "Forgot password?",
+  "login": "Log in",
+  "newToMpuza": "New to MPUZA? ",
+  "createAccount": "Create account",
+  "signupStepOne": "STEP 1 OF 2",
+  "joinMpuza": "Join MPUZA and start translating across languages.",
+  "username": "Username",
+  "emailAddress": "Email address",
+  "invalidEmailAddress": "Enter a valid email address",
+  "phoneNumber": "Phone number",
+  "continueLabel": "Continue",
+  "alreadyHaveAccount": "Already have an account? ",
+  "signupStepTwo": "STEP 2 OF 2",
+  "aboutYouAndSecurity": "About you & security",
+  "gender": "Gender",
+  "male": "Male",
+  "female": "Female",
+  "preferNotToSay": "Prefer not to say",
+  "country": "Country",
+  "countryRwanda": "Rwanda",
+  "countryBurundi": "Burundi",
+  "countryDrCongo": "Democratic Republic of the Congo",
+  "countryKenya": "Kenya",
+  "countryTanzania": "Tanzania",
+  "countryUganda": "Uganda",
+  "createStrongPassword": "Create a strong password",
+  "confirmPassword": "Confirm password",
+  "reenterPassword": "Re-enter your password",
+  "passwordsDoNotMatch": "Passwords do not match",
+  "passwordsMatch": "Passwords match",
+  "verifyYourEmail": "Verify your email",
+  "verificationCodeSentTo": "We sent a 6-digit code to\n{email}",
+  "@verificationCodeSentTo": {
+    "placeholders": {
+      "email": {
+        "type": "String"
+      }
+    }
+  },
+  "codeExpiresInPrefix": "Code expires in ",
+  "didntGetIt": "Didn't get it? ",
+  "resendIn": "Resend in {duration}",
+  "@resendIn": {
+    "placeholders": {
+      "duration": {
+        "type": "String"
+      }
+    }
+  },
+  "resendCode": "Resend code",
+  "verify": "Verify",
+  "wrongEmail": "Wrong email? ",
+  "changeIt": "Change it",
+  "emailVerified": "Email verified!",
+  "accountReadyMessage": "Your MPUZA account is ready. Log in with your email or username to start translating.",
+  "goToLogin": "Go to Login",
+  "forgotPasswordInstructions": "Enter the email address linked to your MPUZA account. We will send you a reset code.",
+  "sendResetCode": "Send reset code",
+  "rememberPassword": "Remember your password? ",
+  "resetYourPassword": "Reset your password",
+  "resetCodeSentTo": "Enter the code sent to\n{email}",
+  "@resetCodeSentTo": {
+    "placeholders": {
+      "email": {
+        "type": "String"
+      }
+    }
+  },
+  "newPassword": "New password",
+  "confirmNewPassword": "Confirm new password",
+  "resetPassword": "Reset password",
+  "back": "Back",
+  "weak": "Weak",
+  "fair": "Fair",
+  "strong": "Strong",
+  "passwordStrength": "Password strength",
+  "eightPlusCharacters": "8+ characters",
+  "uppercase": "Uppercase",
+  "lowercase": "Lowercase",
+  "numberAndSymbol": "Number & symbol",
+  "requiredField": "This field is required",
+  "passwordStrengthRequirement": "Use 8+ characters with uppercase, lowercase, a number and a symbol",
+  "selectGender": "Select a gender option to continue.",
+  "enterSixDigitCode": "Enter the 6-digit code to continue.",
+  "passwordResetComplete": "Password reset. You can now log in.",
+  "translationSuccessful": "Translation successful",
+  "translationTimedOut": "Translation is taking longer than expected. Please try again.",
+  "translationFailed": "Translation failed: {error}",
+  "@translationFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "copiedToClipboard": "Copied to clipboard!",
+  "removedFromFavorites": "Removed from favorites!",
+  "savedToFavorites": "Saved to favorites!",
+  "sourceText": "Source Text",
+  "sourceTextHint": "Enter text to translate...",
+  "characterCount": "{count} characters",
+  "@characterCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "translating": "Translating...",
+  "translate": "Translate",
+  "translation": "Translation",
+  "translationPlaceholder": "Translation will appear here",
+  "cameraPermissionRequired": "Camera permission required",
+  "noTextFoundInImage": "No text found in image",
+  "imageProcessingFailed": "Error processing image: {error}",
+  "@imageProcessingFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "imageTranslationFailed": "Error translating text: {error}",
+  "@imageTranslationFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "takeOrUploadImage": "Take or Upload Image",
+  "takeRearPhoto": "Take Photo (Rear)",
+  "takeFrontPhoto": "Take Photo (Front)",
+  "uploadPhoto": "Upload Photo",
+  "offlineTranslationPacks": "Offline Translation Packs",
+  "deviceStorage": "Device Storage",
+  "storageUsage": "{used} used • {free} free",
+  "@storageUsage": {
+    "placeholders": {
+      "used": {
+        "type": "String"
+      },
+      "free": {
+        "type": "String"
+      }
+    }
+  },
+  "myPacks": "My Packs",
+  "viewAll": "View All",
+  "free": "Free",
+  "downloaded": "Downloaded",
+  "download": "Download",
+  "downloadingPack": "Downloading {pack}...",
+  "@downloadingPack": {
+    "placeholders": {
+      "pack": {
+        "type": "String"
+      }
+    }
+  },
+  "cancel": "Cancel",
+  "basicKinyarwandaPack": "Basic Kinyarwanda Pack",
+  "essentialPhrasesDescription": "Essential phrases and common vocabulary",
+  "completeKinyarwandaPack": "Complete Kinyarwanda Pack",
+  "completeDictionaryDescription": "Full Kinyarwanda-English-French dictionary",
+  "motoristCommunicationPack": "Motorist Communication Pack",
+  "transportationPhrasesDescription": "Transportation and navigation phrases",
+  "medicalEmergencyPack": "Medical & Emergency Pack",
+  "healthcareVocabularyDescription": "Healthcare and emergency vocabulary",
+  "educationPack": "Education Pack",
+  "academicVocabularyDescription": "Academic vocabulary and terminology",
+  "tourismHospitalityPack": "Tourism & Hospitality Pack",
+  "tourismPhrasesDescription": "Tourist phrases and service vocabulary",
+  "lectureSummarizer": "Lecture Summarizer",
+  "comingSoon": "Coming Soon!",
+  "autoSummarizeLectures": "Auto-summarization of lectures",
+  "studyNotesGeneration": "Study notes generation",
+  "vocabularyExtraction": "Vocabulary extraction",
+  "backToHome": "Back to Home",
+  "motoristModeActive": "Motorist Mode Active",
+  "listeningForCommands": "Listening for commands...",
+  "tapToActivate": "Tap to activate",
+  "navigate": "Navigate",
+  "fare": "Fare",
+  "call": "Call",
+  "currentlyNavigating": "Currently navigating",
+  "readyForPassengers": "Ready for passengers",
+  "followTheRoute": "Follow the route",
+  "tapToStartNavigation": "Tap to start navigation",
+  "voiceCommands": "Voice Commands",
+  "listening": "Listening...",
+  "tapToSpeak": "Tap to speak",
+  "enableLocationServices": "Please enable location services",
+  "locationPermissionDenied": "Location permission denied",
+  "locationPermissionPermanentlyDenied": "Location permissions permanently denied",
+  "showingKigaliCenter": "Showing Kigali Center",
+  "placeSearchFailed": "Search failed. Please try again.",
+  "noPhoneAvailable": "No phone available",
+  "placeCategory": "{category}",
+  "@placeCategory": {
+    "placeholders": {
+      "category": {
+        "type": "String"
+      }
+    }
+  },
+  "freeGeocodingNoApiKey": "Free geocoding - no API key",
+  "close": "Close",
+  "navigateHere": "Navigate Here",
+  "selectedLocation": "Selected Location",
+  "setDestinationFirst": "Please set a destination first",
+  "headDirection": "Head {direction}",
+  "@headDirection": {
+    "placeholders": {
+      "direction": {
+        "type": "String"
+      }
+    }
+  },
+  "north": "North",
+  "south": "South",
+  "east": "East",
+  "west": "West",
+  "northeast": "Northeast",
+  "northwest": "Northwest",
+  "southeast": "Southeast",
+  "southwest": "Southwest",
+  "offlineDirectRoute": "Offline route (direct line)",
+  "freeMapsRwanda": "🗺️ Free Maps - Rwanda",
+  "liveLocationFreeGeocoding": "Live location • free geocoding",
+  "hideNearbyPlaces": "Hide Nearby Places",
+  "myLocation": "My Location",
+  "gettingLiveLocation": "Getting your live location...",
+  "zoomIn": "Zoom In",
+  "zoomOut": "Zoom Out",
+  "searchPlaceHint": "Search any place in Rwanda...",
+  "nearbyPlaces": "Nearby Places",
+  "bestRoute": "Best Route",
+  "destination": "Destination",
+  "minutesAbbreviation": "{minutes} min",
+  "@minutesAbbreviation": {
+    "placeholders": {
+      "minutes": {
+        "type": "String"
+      }
+    }
+  },
+  "distance": "Distance",
+  "travelMode": "Travel Mode",
+  "summary": "Summary",
+  "routeReady": "Route ready",
+  "setDestination": "Set Destination",
+  "getDirections": "Get Directions",
+  "clearRoute": "Clear Route",
+  "hospitals": "Hospitals",
+  "hotels": "Hotels",
+  "restaurants": "Restaurants",
+  "coffeeShops": "Coffee Shops",
+  "bars": "Bars",
+  "car": "Car",
+  "walk": "Walk",
+  "bicycle": "Bicycle",
+  "microphonePermissionRequired": "Microphone permission is required to use speech recognition",
+  "noSpeechDetected": "No speech detected. Speak clearly and try again.",
+  "microphonePermissionDenied": "Microphone permission denied",
+  "speechRecognitionError": "Speech recognition error",
+  "speechRecognitionUnavailable": "Speech recognition is not available. Please allow microphone access and try again.",
+  "couldNotStartListening": "Could not start listening. Please allow microphone access and try again.",
+  "browserMicrophonePermissionRequired": "Microphone permission required: use the lock icon in your browser address bar to allow microphone access.",
+  "noMicrophoneDetected": "No microphone detected. Please connect a microphone.",
+  "microphoneReady": "Microphone ready. Speak clearly now.",
+  "couldNotStartListeningWithError": "Could not start listening. Error: {error}",
+  "@couldNotStartListeningWithError": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "audioSelected": "Audio selected: {fileName}",
+  "@audioSelected": {
+    "placeholders": {
+      "fileName": {
+        "type": "String"
+      }
+    }
+  },
+  "audioTranscribed": "Audio transcribed successfully!",
+  "audioSelectionFailed": "Error picking audio: {error}",
+  "@audioSelectionFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "selectedAudioCouldNotBeRead": "The selected audio file could not be read.",
+  "emptySpeechTranslationResponse": "The speech translation response was empty.",
+  "translationCompleted": "Translation completed",
+  "recordVoice": "Record Voice",
+  "uploadAudio": "Upload Audio",
+  "fromLanguage": "From",
+  "toLanguage": "To",
+  "outputOptions": "Output Options:",
+  "textOutput": "📝 Text",
+  "audioOutput": "🔊 Audio",
+  "bothOutputs": "📝🔊 Both",
+  "processingAudio": "Processing Audio...",
+  "convertingSpeechToText": "Converting speech to text",
+  "tapToStartRecording": "Tap to start recording",
+  "confidence": "Confidence: {percentage}%",
+  "@confidence": {
+    "placeholders": {
+      "percentage": {
+        "type": "String"
+      }
+    }
+  },
+  "recognizedSpeech": "Recognized Speech",
+  "shareComingSoon": "Share feature coming soon!",
+  "recentTranslations": "Recent Translations",
+  "liveTranslationTimedOut": "Live translation timed out. Please try again with a shorter video.",
+  "mediaPermissionPermanentlyDenied": "Camera or microphone access is permanently denied. Please enable it in app settings.",
+  "cameraMicrophonePermissionsRequired": "Camera and microphone permissions are required to record video.",
+  "chooseVideoSource": "Choose how to provide your video",
+  "recordVideo": "Record video",
+  "recordVideoDescription": "Use your camera to capture a new video",
+  "uploadVideoFromStorage": "Upload video from local storage",
+  "pickVideoDescription": "Pick a video file from your device",
+  "noVideoSelected": "No video file was selected.",
+  "videoSelected": "Video selected: {filename}",
+  "@videoSelected": {
+    "placeholders": {
+      "filename": {
+        "type": "String"
+      }
+    }
+  },
+  "videoPickFailed": "Unable to pick the video file: {error}",
+  "@videoPickFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "noVideoRecorded": "No video was recorded.",
+  "videoRecorded": "Video recorded: {filename}",
+  "@videoRecorded": {
+    "placeholders": {
+      "filename": {
+        "type": "String"
+      }
+    }
+  },
+  "videoRecordFailed": "Unable to record the video: {error}",
+  "@videoRecordFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "noMediaSelected": "No media selected",
+  "preparingLiveSubtitles": "Preparing live translated subtitles...",
+  "invalidTranslationResponse": "Unexpected response format from translation service.",
+  "translationComplete": "Translation complete!",
+  "mediaUploadFailed": "Media upload failed: {error}",
+  "@mediaUploadFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "enterYoutubeUrl": "Please enter a YouTube URL",
+  "youtubeLiveTranslationFailed": "YouTube live translation failed",
+  "youtubeLiveTranslationFailedWithError": "YouTube live translation failed: {error}",
+  "@youtubeLiveTranslationFailedWithError": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "noSpokenPhrasesDetected": "No spoken phrases were detected.",
+  "liveSubtitlesReady": "Live subtitles ready.",
+  "liveTranslationFailed": "Live translation failed",
+  "emptyMediaSummaryResponse": "The media summary response was empty.",
+  "summaryComplete": "Summary complete!",
+  "mediaSummarizationFailed": "Media summarization failed: {error}",
+  "@mediaSummarizationFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "emptyYoutubeSummaryResponse": "The YouTube summary response was empty.",
+  "youtubeSummarizationFailed": "YouTube summarization failed: {error}",
+  "@youtubeSummarizationFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "selectOrRecordVideo": "Please select a video file or record a video first.",
+  "enterYoutubeUrlOrSelectVideo": "Please enter a YouTube URL or select a video first.",
+  "youtube": "YouTube",
+  "video": "Video",
+  "youtubeUrl": "YouTube URL",
+  "videoFile": "Video file",
+  "tapToSelectOrRecordVideo": "Tap to select a video file or record a video",
+  "sourceLanguage": "Source language",
+  "targetLanguage": "Target language",
+  "auto": "Auto",
+  "summaryForLanguage": "Summary ({language}):",
+  "@summaryForLanguage": {
+    "placeholders": {
+      "language": {
+        "type": "String"
+      }
+    }
+  },
+  "liveTranscript": "Live transcript:",
+  "targetLanguageOnly": "{language} only",
+  "@targetLanguageOnly": {
+    "placeholders": {
+      "language": {
+        "type": "String"
+      }
+    }
+  },
+  "showBothLanguages": "Show both languages",
+  "stop": "Stop",
+  "listen": "Listen",
+  "studyTools": "Study tools",
+  "summarize": "Summarize",
+  "studyNotes": "Study notes",
+  "notesSaved": "Notes saved!",
+  "translateFirst": "Translate first",
+  "vocabulary": "Vocabulary",
+  "keyVocabularyExtracted": "Key vocabulary extracted!",
+  "quiz": "Quiz",
+  "quizGenerationComingSoon": "Quiz generation coming soon!",
+  "textToSpeechError": "Text-to-speech error: {error}",
+  "@textToSpeechError": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "translatedSpokenPhrases": "Translated {count} spoken phrases...",
+  "@translatedSpokenPhrases": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "mediaContentContinues": "Media content continues...",
+  "nothingToPlay": "Nothing to play. Translate first.",
+  "unableToPlayAudio": "Unable to play audio: {error}",
+  "@unableToPlayAudio": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "noCameraFound": "No camera was found on this device.",
+  "cameraOpenFailed": "Unable to open camera: {error}",
+  "@cameraOpenFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "videoRecordingFailed": "Recording failed: {error}",
+  "@videoRecordingFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "stopRecording": "Stop recording",
+  "startRecording": "Start recording",
+  "rwandaAfricaWorld": "Rwanda • Africa • World",
+  "developedByCompany": "Developed by Prime Data Consulting Group LTD",
+  "connectingPeople": "Connecting People",
+  "subtitlesGenerated": "Subtitles generated!",
+  "liveLocationActive": "Live location active!",
+  "destinationSetTo": "Destination set to {location}",
+  "@destinationSetTo": {
+    "placeholders": {
+      "location": {
+        "type": "String"
+      }
+    }
+  },
+  "destinationSet": "Destination set",
+  "bestRouteSummary": "Best route: {distance} km, {duration} min",
+  "@bestRouteSummary": {
+    "placeholders": {
+      "distance": {
+        "type": "String"
+      },
+      "duration": {
+        "type": "String"
+      }
+    }
+  },
+  "offlineDirectLine": "Offline mode - direct line"
+}
