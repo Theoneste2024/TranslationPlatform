@@ -6,6 +6,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:provider/provider.dart';
 
+import '../../l10n/app_localizations_extensions.dart';
 import '../../core/network/api_client.dart';
 import '../../widgets/app_header.dart';
 import '../../widgets/app_sidebar.dart';
@@ -121,8 +122,8 @@ class _TextTranslationScreenState extends State<TextTranslationScreen> {
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text("Translation successful"),
+        SnackBar(
+          content: Text(context.l10n.translationSuccessful),
           backgroundColor: Colors.green,
         ),
       );
@@ -134,9 +135,8 @@ class _TextTranslationScreenState extends State<TextTranslationScreen> {
         _isSpeaking = false;
       });
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-              'Translation is taking longer than expected. Please try again.'),
+        SnackBar(
+          content: Text(context.l10n.translationTimedOut),
           backgroundColor: Colors.red,
         ),
       );
@@ -149,7 +149,7 @@ class _TextTranslationScreenState extends State<TextTranslationScreen> {
       });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text("Translation failed: $e"),
+          content: Text(context.l10n.translationFailed(e.toString())),
           backgroundColor: Colors.red,
         ),
       );
@@ -198,8 +198,8 @@ class _TextTranslationScreenState extends State<TextTranslationScreen> {
     await Clipboard.setData(ClipboardData(text: _targetController.text));
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Copied to clipboard!'),
+      SnackBar(
+        content: Text(context.l10n.copiedToClipboard),
         backgroundColor: Colors.green,
       ),
     );
@@ -232,7 +232,9 @@ class _TextTranslationScreenState extends State<TextTranslationScreen> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
-          isAlreadyFavorite ? 'Removed from favorites!' : 'Saved to favorites!',
+          isAlreadyFavorite
+              ? context.l10n.removedFromFavorites
+              : context.l10n.savedToFavorites,
         ),
         backgroundColor: Colors.pink,
       ),
@@ -301,7 +303,7 @@ class _TextTranslationScreenState extends State<TextTranslationScreen> {
     return AppPageShell(
       child: Scaffold(
         appBar: AppBar(
-          title: const Text('Text Translation'),
+          title: Text(context.l10n.textTranslation),
           elevation: 0,
           leading: const AppMenuButton(),
           automaticallyImplyLeading: false,
@@ -376,7 +378,7 @@ class _TextTranslationScreenState extends State<TextTranslationScreen> {
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
                             Text(
-                              'Source Text',
+                              context.l10n.sourceText,
                               style: TextStyle(
                                 fontSize: 14,
                                 fontWeight: FontWeight.bold,
@@ -404,7 +406,7 @@ class _TextTranslationScreenState extends State<TextTranslationScreen> {
                             maxLines: null,
                             expands: true,
                             decoration: InputDecoration(
-                              hintText: 'Enter text to translate...',
+                              hintText: context.l10n.sourceTextHint,
                               border: InputBorder.none,
                               hintStyle: TextStyle(color: Colors.grey.shade400),
                             ),
@@ -415,7 +417,9 @@ class _TextTranslationScreenState extends State<TextTranslationScreen> {
                           mainAxisAlignment: MainAxisAlignment.end,
                           children: [
                             Text(
-                              '${_sourceController.text.length} characters',
+                              context.l10n.characterCount(
+                                _sourceController.text.length,
+                              ),
                               style: TextStyle(
                                 fontSize: 12,
                                 color: Colors.grey.shade500,
@@ -447,10 +451,10 @@ class _TextTranslationScreenState extends State<TextTranslationScreen> {
                       elevation: 2,
                     ),
                     child: _isTranslating
-                        ? const Row(
+                        ? Row(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              SizedBox(
+                              const SizedBox(
                                 width: 20,
                                 height: 20,
                                 child: CircularProgressIndicator(
@@ -458,13 +462,13 @@ class _TextTranslationScreenState extends State<TextTranslationScreen> {
                                   strokeWidth: 2,
                                 ),
                               ),
-                              SizedBox(width: 12),
-                              Text('Translating...'),
+                              const SizedBox(width: 12),
+                              Text(context.l10n.translating),
                             ],
                           )
-                        : const Text(
-                            'Translate',
-                            style: TextStyle(
+                        : Text(
+                            context.l10n.translate,
+                            style: const TextStyle(
                               fontSize: 18,
                               fontWeight: FontWeight.bold,
                             ),
@@ -492,7 +496,7 @@ class _TextTranslationScreenState extends State<TextTranslationScreen> {
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
                               Text(
-                                'Translation',
+                                context.l10n.translation,
                                 style: TextStyle(
                                   fontSize: 14,
                                   fontWeight: FontWeight.bold,
@@ -518,7 +522,7 @@ class _TextTranslationScreenState extends State<TextTranslationScreen> {
                             child: SingleChildScrollView(
                               child: Text(
                                 _targetController.text.isEmpty
-                                    ? 'Translation will appear here'
+                                    ? context.l10n.translationPlaceholder
                                     : _targetController.text,
                                 style: TextStyle(
                                   fontSize: 18,

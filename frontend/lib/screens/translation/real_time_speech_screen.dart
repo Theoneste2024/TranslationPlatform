@@ -1,3 +1,5 @@
+// ignore_for_file: use_build_context_synchronously
+
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
@@ -7,6 +9,8 @@ import 'package:audioplayers/audioplayers.dart';
 import 'package:dio/dio.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:provider/provider.dart';
+
+import '../../l10n/app_localizations_extensions.dart';
 import '../../core/constants/languages.dart';
 import '../../core/network/api_client.dart';
 import '../../widgets/app_sidebar.dart';
@@ -111,9 +115,7 @@ class _RealTimeSpeechScreenState extends State<RealTimeSpeechScreen>
     PermissionStatus status = await Permission.microphone.request();
 
     if (!status.isGranted) {
-      _showSnackBar(
-          'Microphone permission is required to use speech recognition',
-          Colors.red);
+      _showSnackBar(context.l10n.microphonePermissionRequired, Colors.red);
       return;
     }
 
@@ -135,21 +137,19 @@ class _RealTimeSpeechScreenState extends State<RealTimeSpeechScreen>
         String errorMsg = error.toString();
         // Handle both error objects and generic events (web compatibility)
         if (errorMsg.contains('network') || errorMsg.contains('no-speech')) {
-          _showSnackBar('No speech detected. Please try again.', Colors.orange);
+          _showSnackBar(context.l10n.noSpeechDetected, Colors.orange);
         } else if (errorMsg.contains('not-allowed') ||
             errorMsg.contains('permission')) {
-          _showSnackBar('Microphone permission denied', Colors.red);
+          _showSnackBar(context.l10n.microphonePermissionDenied, Colors.red);
         } else {
-          _showSnackBar('Speech recognition error', Colors.red);
+          _showSnackBar(context.l10n.speechRecognitionError, Colors.red);
         }
       },
     );
 
     if (!available) {
       _showSnackBar(
-        kIsWeb
-            ? 'Speech recognition is not available. Please use Chrome and allow microphone access.'
-            : 'Speech recognition not available',
+        context.l10n.speechRecognitionUnavailable,
         Colors.red,
       );
       return;
@@ -177,11 +177,11 @@ class _RealTimeSpeechScreenState extends State<RealTimeSpeechScreen>
             await _translateText(result.recognizedWords);
           }
         },
-        localeId: _getLocaleFromLanguage(_sourceLanguage),
-        listenFor: const Duration(seconds: 30),
-        pauseFor: const Duration(seconds: 3),
         listenOptions: stt.SpeechListenOptions(
           listenMode: stt.ListenMode.confirmation,
+          listenFor: const Duration(seconds: 30),
+          pauseFor: const Duration(seconds: 3),
+          localeId: _getLocaleFromLanguage(_sourceLanguage),
           partialResults: true,
           cancelOnError: true,
         ),
@@ -193,9 +193,7 @@ class _RealTimeSpeechScreenState extends State<RealTimeSpeechScreen>
       debugPrint('Error during speech listen: $e');
       setState(() => _isListening = false);
       _animationController.stop();
-      _showSnackBar(
-          'Could not start listening. Please allow microphone access and try again.',
-          Colors.red);
+      _showSnackBar(context.l10n.couldNotStartListening, Colors.red);
     }
   }
 
@@ -220,18 +218,18 @@ class _RealTimeSpeechScreenState extends State<RealTimeSpeechScreen>
         final errorMsg = message.toLowerCase();
         if (errorMsg.contains('permission')) {
           _showSnackBar(
-            'Microphone Permission Required: Click the lock icon in the browser address bar and select "Allow" for microphone.',
+            context.l10n.browserMicrophonePermissionRequired,
             Colors.red,
           );
         } else if (errorMsg.contains('no')) {
           _showSnackBar(
-            'No speech detected. Speak clearly and try again.',
+            context.l10n.noSpeechDetected,
             Colors.orange,
           );
         } else if (errorMsg.contains('microphone detected') ||
             errorMsg.contains('audio input')) {
           _showSnackBar(
-            'No microphone detected. Please connect a microphone.',
+            context.l10n.noMicrophoneDetected,
             Colors.red,
           );
         } else {
@@ -256,7 +254,7 @@ class _RealTimeSpeechScreenState extends State<RealTimeSpeechScreen>
 
     if (!available) {
       _showSnackBar(
-        'Speech recognition is not available. Please use Chrome/Edge and allow microphone access.',
+        context.l10n.speechRecognitionUnavailable,
         Colors.red,
       );
       return;
@@ -268,7 +266,7 @@ class _RealTimeSpeechScreenState extends State<RealTimeSpeechScreen>
     });
 
     _showSnackBar(
-      'Microphone ready. Speak clearly now.',
+      context.l10n.microphoneReady,
       Colors.green,
     );
 
@@ -284,7 +282,7 @@ class _RealTimeSpeechScreenState extends State<RealTimeSpeechScreen>
       setState(() => _isListening = false);
       _animationController.stop();
       _showSnackBar(
-        'Could not start listening. Error: $e',
+        context.l10n.couldNotStartListeningWithError(e.toString()),
         Colors.red,
       );
     }
@@ -321,17 +319,20 @@ class _RealTimeSpeechScreenState extends State<RealTimeSpeechScreen>
           _isUploading = true;
         });
 
-        _showSnackBar('✅ Audio selected: $_fileName', Colors.green);
+        _showSnackBar(
+          context.l10n.audioSelected(_fileName ?? ''),
+          Colors.green,
+        );
 
         // In a real app, you'd process the audio file here
         // For demo, we'll simulate transcription
         await _uploadAudioAndTranslate();
 
-        _showSnackBar('✅ Audio transcribed successfully!', Colors.green);
+        _showSnackBar(context.l10n.audioTranscribed, Colors.green);
       }
     } catch (e) {
       setState(() => _isUploading = false);
-      _showSnackBar('Error picking audio: $e', Colors.red);
+      _showSnackBar(context.l10n.audioSelectionFailed(e.toString()), Colors.red);
     }
   }
 
@@ -341,7 +342,7 @@ class _RealTimeSpeechScreenState extends State<RealTimeSpeechScreen>
     try {
       final audioBytes = _selectedAudioFile!.bytes;
       if (audioBytes == null) {
-        throw Exception('The selected audio file could not be read.');
+        throw Exception(context.l10n.selectedAudioCouldNotBeRead);
       }
 
       final response =
@@ -359,7 +360,7 @@ class _RealTimeSpeechScreenState extends State<RealTimeSpeechScreen>
 
       final data = response.data;
       if (data == null) {
-        throw Exception('The speech translation response was empty.');
+        throw Exception(context.l10n.emptySpeechTranslationResponse);
       }
       setState(() {
         _recognizedText = data['original_text']?.toString() ?? '';
@@ -370,14 +371,14 @@ class _RealTimeSpeechScreenState extends State<RealTimeSpeechScreen>
       await _handleOutput();
 
       _showSnackBar(
-        'Translation completed',
+        context.l10n.translationCompleted,
         Colors.green,
       );
     } catch (e) {
       setState(() => _isUploading = false);
 
       _showSnackBar(
-        'Translation failed: $e',
+        context.l10n.translationFailed(e.toString()),
         Colors.red,
       );
     }
@@ -420,13 +421,13 @@ class _RealTimeSpeechScreenState extends State<RealTimeSpeechScreen>
 
         await _handleOutput();
       } else {
-        throw Exception('Translation failed');
+        throw Exception(context.l10n.translationFailed(''));
       }
     } catch (e) {
       setState(() => _isTranslating = false);
 
       _showSnackBar(
-        'Translation failed: $e',
+        context.l10n.translationFailed(e.toString()),
         Colors.red,
       );
     }
@@ -493,7 +494,7 @@ class _RealTimeSpeechScreenState extends State<RealTimeSpeechScreen>
     return AppPageShell(
       child: Scaffold(
         appBar: AppBar(
-          title: const Text('Speech Translation'),
+          title: Text(context.l10n.speechTranslation),
           elevation: 0,
           backgroundColor: Colors.blue,
           foregroundColor: Colors.white,
@@ -508,12 +509,12 @@ class _RealTimeSpeechScreenState extends State<RealTimeSpeechScreen>
                 children: [
                   Expanded(
                     child: ChoiceChip(
-                      label: const Row(
+                      label: Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Icon(Icons.mic, size: 16),
-                          SizedBox(width: 4),
-                          Text('Record Voice'),
+                          const Icon(Icons.mic, size: 16),
+                          const SizedBox(width: 4),
+                          Text(context.l10n.recordVoice),
                         ],
                       ),
                       selected: !_isUploading && !_isListening,
@@ -526,19 +527,19 @@ class _RealTimeSpeechScreenState extends State<RealTimeSpeechScreen>
                         }
                       },
                       selectedColor: Colors.white,
-                      backgroundColor: Colors.white.withOpacity(0.2),
+                      backgroundColor: Colors.white.withValues(alpha: 0.2),
                       labelStyle: const TextStyle(color: Colors.black),
                     ),
                   ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: ChoiceChip(
-                      label: const Row(
+                      label: Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Icon(Icons.upload_file, size: 16),
-                          SizedBox(width: 4),
-                          Text('Upload Audio'),
+                          const Icon(Icons.upload_file, size: 16),
+                          const SizedBox(width: 4),
+                          Text(context.l10n.uploadAudio),
                         ],
                       ),
                       selected: _selectedAudioFile != null,
@@ -546,7 +547,7 @@ class _RealTimeSpeechScreenState extends State<RealTimeSpeechScreen>
                         if (selected) _pickAudioFile();
                       },
                       selectedColor: Colors.white,
-                      backgroundColor: Colors.white.withOpacity(0.2),
+                      backgroundColor: Colors.white.withValues(alpha: 0.2),
                       labelStyle: const TextStyle(color: Colors.black),
                     ),
                   ),
@@ -578,7 +579,7 @@ class _RealTimeSpeechScreenState extends State<RealTimeSpeechScreen>
                               onChanged: (value) {
                                 setState(() => _sourceLanguage = value!);
                               },
-                              label: 'From',
+                              label: context.l10n.fromLanguage,
                             ),
                           ),
                           IconButton(
@@ -593,7 +594,7 @@ class _RealTimeSpeechScreenState extends State<RealTimeSpeechScreen>
                                 setState(() => _targetLanguage = value!);
                                 _initTTS();
                               },
-                              label: 'To',
+                              label: context.l10n.toLanguage,
                             ),
                           ),
                         ],
@@ -611,9 +612,9 @@ class _RealTimeSpeechScreenState extends State<RealTimeSpeechScreen>
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Text(
-                              'Output Options:',
-                              style: TextStyle(
+                            Text(
+                              context.l10n.outputOptions,
+                              style: const TextStyle(
                                 fontWeight: FontWeight.bold,
                                 fontSize: 14,
                               ),
@@ -623,7 +624,7 @@ class _RealTimeSpeechScreenState extends State<RealTimeSpeechScreen>
                               children: [
                                 Expanded(
                                   child: FilterChip(
-                                    label: const Text('📝 Text'),
+                                    label: Text(context.l10n.textOutput),
                                     selected: _outputText,
                                     onSelected: (value) {
                                       setState(() => _outputText = value);
@@ -635,7 +636,7 @@ class _RealTimeSpeechScreenState extends State<RealTimeSpeechScreen>
                                 const SizedBox(width: 8),
                                 Expanded(
                                   child: FilterChip(
-                                    label: const Text('🔊 Audio'),
+                                    label: Text(context.l10n.audioOutput),
                                     selected: _outputAudio,
                                     onSelected: (value) {
                                       setState(() => _outputAudio = value);
@@ -647,7 +648,7 @@ class _RealTimeSpeechScreenState extends State<RealTimeSpeechScreen>
                                 const SizedBox(width: 8),
                                 Expanded(
                                   child: FilterChip(
-                                    label: const Text('📝🔊 Both'),
+                                    label: Text(context.l10n.bothOutputs),
                                     selected: _outputText && _outputAudio,
                                     onSelected: (value) {
                                       setState(() {
@@ -692,14 +693,14 @@ class _RealTimeSpeechScreenState extends State<RealTimeSpeechScreen>
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Text(
-                              'Processing Audio...',
-                              style: TextStyle(
+                            Text(
+                              context.l10n.processingAudio,
+                              style: const TextStyle(
                                 fontWeight: FontWeight.bold,
                               ),
                             ),
                             Text(
-                              _fileName ?? 'Converting speech to text',
+                              _fileName ?? context.l10n.convertingSpeechToText,
                               style: const TextStyle(color: Colors.grey),
                             ),
                           ],
@@ -764,9 +765,9 @@ class _RealTimeSpeechScreenState extends State<RealTimeSpeechScreen>
                               decoration: BoxDecoration(
                                 shape: BoxShape.circle,
                                 color: _isListening
-                                    ? Colors.red.withOpacity(0.3 -
+                                    ? Colors.red.withValues(alpha: 0.3 -
                                         (_animationController.value * 0.1))
-                                    : Colors.blue.withOpacity(0.1),
+                                    : Colors.blue.withValues(alpha: 0.1),
                               ),
                               child: Center(
                                 child: Container(
@@ -781,7 +782,7 @@ class _RealTimeSpeechScreenState extends State<RealTimeSpeechScreen>
                                         color: (_isListening
                                                 ? Colors.red
                                                 : Colors.blue)
-                                            .withOpacity(0.3),
+                                            .withValues(alpha: 0.3),
                                         blurRadius: 20,
                                         spreadRadius: 5,
                                       ),
@@ -800,9 +801,9 @@ class _RealTimeSpeechScreenState extends State<RealTimeSpeechScreen>
                       ),
                       const SizedBox(height: 24),
                       if (_isListening) ...[
-                        const Text(
-                          'Listening...',
-                          style: TextStyle(
+                        Text(
+                          context.l10n.listening,
+                          style: const TextStyle(
                             fontSize: 20,
                             color: Colors.red,
                             fontWeight: FontWeight.bold,
@@ -810,13 +811,15 @@ class _RealTimeSpeechScreenState extends State<RealTimeSpeechScreen>
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          'Confidence: ${(_confidence * 100).toStringAsFixed(0)}%',
+                          context.l10n.confidence(
+                            (_confidence * 100).toStringAsFixed(0),
+                          ),
                           style: const TextStyle(color: Colors.grey),
                         ),
                       ] else if (_recognizedText.isEmpty) ...[
-                        const Text(
-                          'Tap to start recording',
-                          style: TextStyle(
+                        Text(
+                          context.l10n.tapToStartRecording,
+                          style: const TextStyle(
                             fontSize: 16,
                             color: Colors.grey,
                           ),
@@ -856,9 +859,9 @@ class _RealTimeSpeechScreenState extends State<RealTimeSpeechScreen>
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  const Text(
-                                    'Recognized Speech',
-                                    style: TextStyle(
+                                  Text(
+                                    context.l10n.recognizedSpeech,
+                                    style: const TextStyle(
                                       fontSize: 12,
                                       color: Colors.grey,
                                     ),
@@ -921,9 +924,9 @@ class _RealTimeSpeechScreenState extends State<RealTimeSpeechScreen>
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  const Text(
-                                    'Translation',
-                                    style: TextStyle(
+                                  Text(
+                                    context.l10n.translation,
+                                    style: const TextStyle(
                                       fontSize: 12,
                                       color: Colors.grey,
                                     ),
@@ -971,7 +974,9 @@ class _RealTimeSpeechScreenState extends State<RealTimeSpeechScreen>
                                 await Clipboard.setData(
                                     ClipboardData(text: _translatedText));
                                 _showSnackBar(
-                                    'Copied to clipboard!', Colors.green);
+                                  context.l10n.copiedToClipboard,
+                                  Colors.green,
+                                );
                               },
                               color: Colors.blue,
                             ),
@@ -980,7 +985,9 @@ class _RealTimeSpeechScreenState extends State<RealTimeSpeechScreen>
                               onPressed: () {
                                 // Save to favorites
                                 _showSnackBar(
-                                    'Saved to favorites!', Colors.pink);
+                                  context.l10n.savedToFavorites,
+                                  Colors.pink,
+                                );
                               },
                               color: Colors.blue,
                             ),
@@ -988,8 +995,10 @@ class _RealTimeSpeechScreenState extends State<RealTimeSpeechScreen>
                               icon: const Icon(Icons.share),
                               onPressed: () {
                                 // Share
-                                _showSnackBar('Share feature coming soon!',
-                                    Colors.orange);
+                                _showSnackBar(
+                                  context.l10n.shareComingSoon,
+                                  Colors.orange,
+                                );
                               },
                               color: Colors.blue,
                             ),
@@ -1014,9 +1023,9 @@ class _RealTimeSpeechScreenState extends State<RealTimeSpeechScreen>
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text(
-                          'Recent Translations',
-                          style: TextStyle(
+                        Text(
+                          context.l10n.recentTranslations,
+                          style: const TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.bold,
                           ),

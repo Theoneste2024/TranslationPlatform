@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart' show CupertinoLocalizations;
 import 'package:flutter/services.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:provider/provider.dart';
 import 'core/constants/system_ui.dart';
 import 'core/network/api_client.dart';
+import 'l10n/generated/app_localizations.dart';
+import 'l10n/app_localizations_extensions.dart';
 import 'providers/auth_provider.dart';
 import 'providers/offline_provider.dart';
 import 'screens/education/lecture_summarizer_screen.dart';
@@ -47,36 +51,70 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      debugShowCheckedModeBanner: false,
-      title: 'Mpuza - Rwanda',
-      theme: ThemeData(
-        primarySwatch: Colors.blue,
-        useMaterial3: true,
-        appBarTheme: const AppBarTheme(
-          centerTitle: true,
-          systemOverlayStyle: appSystemUiOverlayStyle,
+    return Consumer<AuthProvider>(
+      builder: (context, auth, _) => MaterialApp(
+        debugShowCheckedModeBanner: false,
+        onGenerateTitle: (context) => AppLocalizations.of(context)!.appTitle,
+        locale: Locale(auth.systemLanguage),
+        localizationsDelegates: const [
+          AppLocalizations.delegate,
+          _EnglishFallbackForKinyarwanda<MaterialLocalizations>(
+            GlobalMaterialLocalizations.delegate,
+          ),
+          _EnglishFallbackForKinyarwanda<WidgetsLocalizations>(
+            GlobalWidgetsLocalizations.delegate,
+          ),
+          _EnglishFallbackForKinyarwanda<CupertinoLocalizations>(
+            GlobalCupertinoLocalizations.delegate,
+          ),
+          GlobalMaterialLocalizations.delegate,
+          GlobalWidgetsLocalizations.delegate,
+          GlobalCupertinoLocalizations.delegate,
+        ],
+        supportedLocales: AppLocalizations.supportedLocales,
+        theme: ThemeData(
+          primarySwatch: Colors.blue,
+          useMaterial3: true,
+          appBarTheme: const AppBarTheme(
+            centerTitle: true,
+            systemOverlayStyle: appSystemUiOverlayStyle,
+          ),
         ),
+        builder: (context, child) => AnnotatedRegion<SystemUiOverlayStyle>(
+          value: appSystemUiOverlayStyle,
+          child: child ?? const SizedBox.shrink(),
+        ),
+        routes: {
+          AppRoutes.home: (_) => const HomeScreen(),
+          AppRoutes.textTranslation: (_) => const TextTranslationScreen(),
+          AppRoutes.speechTranslation: (_) => const RealTimeSpeechScreen(),
+          AppRoutes.videoTranslation: (_) => const VideoTranslationScreen(),
+          AppRoutes.cameraTranslation: (_) => const CameraTranslationScreen(),
+          AppRoutes.educationTools: (_) => const LectureSummarizerScreen(),
+          AppRoutes.offlinePacks: (_) => const OfflinePacksScreen(),
+          AppRoutes.driverMode: (_) => const MotoristModeScreen(),
+          AppRoutes.maps: (_) => const GoogleMapsScreen(),
+          AppRoutes.settings: (_) => const SettingsScreen(),
+        },
+        home: const _AppHome(),
       ),
-      builder: (context, child) => AnnotatedRegion<SystemUiOverlayStyle>(
-        value: appSystemUiOverlayStyle,
-        child: child ?? const SizedBox.shrink(),
-      ),
-      routes: {
-        AppRoutes.home: (_) => const HomeScreen(),
-        AppRoutes.textTranslation: (_) => const TextTranslationScreen(),
-        AppRoutes.speechTranslation: (_) => const RealTimeSpeechScreen(),
-        AppRoutes.videoTranslation: (_) => const VideoTranslationScreen(),
-        AppRoutes.cameraTranslation: (_) => const CameraTranslationScreen(),
-        AppRoutes.educationTools: (_) => const LectureSummarizerScreen(),
-        AppRoutes.offlinePacks: (_) => const OfflinePacksScreen(),
-        AppRoutes.driverMode: (_) => const MotoristModeScreen(),
-        AppRoutes.maps: (_) => const GoogleMapsScreen(),
-        AppRoutes.settings: (_) => const SettingsScreen(),
-      },
-      home: const _AppHome(),
     );
   }
+}
+
+class _EnglishFallbackForKinyarwanda<T> extends LocalizationsDelegate<T> {
+  const _EnglishFallbackForKinyarwanda(this.delegate);
+
+  final LocalizationsDelegate<T> delegate;
+
+  @override
+  bool isSupported(Locale locale) => locale.languageCode == 'rw';
+
+  @override
+  Future<T> load(Locale locale) => delegate.load(const Locale('en'));
+
+  @override
+  bool shouldReload(covariant LocalizationsDelegate<T> old) => false;
 }
 
 class _AppHome extends StatelessWidget {
@@ -106,11 +144,11 @@ class _AppHome extends StatelessWidget {
                     const SizedBox(height: 16),
                     ElevatedButton(
                       onPressed: auth.restoreSession,
-                      child: const Text('Retry'),
+                      child: Text(context.l10n.retry),
                     ),
                     TextButton(
                       onPressed: auth.continueToLogin,
-                      child: const Text('Continue to Login'),
+                      child: Text(context.l10n.continueToLogin),
                     ),
                   ],
                 ),

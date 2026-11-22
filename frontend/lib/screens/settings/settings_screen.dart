@@ -1,4 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+
+import '../../l10n/app_localizations_extensions.dart';
+import '../../l10n/generated/app_localizations.dart';
+import '../../providers/auth_provider.dart';
 import '../../widgets/app_header.dart';
 import '../../widgets/app_sidebar.dart';
 
@@ -10,7 +15,7 @@ class SettingsScreen extends StatelessWidget {
     return AppPageShell(
       child: Scaffold(
         appBar: AppBar(
-          title: const Text('Settings'),
+          title: Text(context.l10n.settings),
           backgroundColor: Colors.blue,
           foregroundColor: Colors.white,
           leading: const AppMenuButton(),
@@ -20,14 +25,14 @@ class SettingsScreen extends StatelessWidget {
         body: ListView(
           padding: const EdgeInsets.all(16),
           children: [
-            const Text(
-              'App Settings',
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+            Text(
+              context.l10n.settingsTitle,
+              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 16),
             SwitchListTile(
-              title: const Text('Dark Mode'),
-              subtitle: const Text('Enable dark theme'),
+              title: Text(context.l10n.darkMode),
+              subtitle: Text(context.l10n.enableDarkTheme),
               value: false,
               onChanged: (value) {},
               secondary: const Icon(Icons.dark_mode),
@@ -35,25 +40,41 @@ class SettingsScreen extends StatelessWidget {
             const Divider(),
             ListTile(
               leading: const Icon(Icons.language),
-              title: const Text('Default Language'),
-              subtitle: const Text('English'),
+              title: Text(context.l10n.defaultLanguage),
+              subtitle: Text(
+                _languageName(
+                  context.l10n,
+                  context.watch<AuthProvider>().systemLanguage,
+                ),
+              ),
               onTap: () {},
             ),
             ListTile(
               leading: const Icon(Icons.volume_up),
-              title: const Text('Speech Rate'),
-              subtitle: const Text('Normal'),
+              title: Text(context.l10n.speechRate),
+              subtitle: Text(context.l10n.normal),
               onTap: () {},
             ),
             ListTile(
               leading: const Icon(Icons.storage),
-              title: const Text('Clear Cache'),
-              subtitle: const Text('245 MB used'),
+              title: Text(context.l10n.clearCache),
+              subtitle: Text(context.l10n.cacheUsage('245 MB')),
               onTap: () {},
             ),
           ],
         ),
       ),
     );
+  }
+
+  String _languageName(AppLocalizations localizations, String language) {
+    switch (language) {
+      case 'rw':
+        return localizations.languageKinyarwanda;
+      case 'fr':
+        return localizations.languageFrench;
+      default:
+        return localizations.languageEnglish;
+    }
   }
 }

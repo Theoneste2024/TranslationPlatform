@@ -24,6 +24,8 @@ class AuthProvider extends ChangeNotifier {
   static const _expiryKey = 'auth_token_expiry';
   static const _usernameKey = 'auth_username';
   static const _emailKey = 'auth_email';
+  static const _systemLanguageKey = 'system_language';
+  static const supportedSystemLanguages = {'en', 'rw', 'fr'};
 
   final Dio _dio;
   final Future<SharedPreferences> Function() _preferencesFactory;
@@ -32,6 +34,7 @@ class AuthProvider extends ChangeNotifier {
   bool _isLoading = false;
   bool _isInitializing = true;
   String? _initializationError;
+  String _systemLanguage = 'en';
 
   bool get isAuthenticated => _accessToken != null && _user != null;
   bool get isLoading => _isLoading;
@@ -39,6 +42,7 @@ class AuthProvider extends ChangeNotifier {
   String? get initializationError => _initializationError;
   String? get accessToken => _accessToken;
   UserModel? get user => _user;
+  String get systemLanguage => _systemLanguage;
 
   void continueToLogin() {
     _initializationError = null;
@@ -57,6 +61,9 @@ class AuthProvider extends ChangeNotifier {
       final expiresAt = preferences.getInt(_expiryKey);
       final username = preferences.getString(_usernameKey);
       final email = preferences.getString(_emailKey);
+      _systemLanguage = _languageFrom(
+        preferences.getString(_systemLanguageKey),
+      );
 
       if (token != null &&
           expiresAt != null &&
@@ -64,7 +71,12 @@ class AuthProvider extends ChangeNotifier {
           username != null &&
           email != null) {
         _accessToken = token;
-        _user = UserModel(name: username, email: email, photoURL: '');
+        _user = UserModel(
+          name: username,
+          email: email,
+          photoURL: '',
+          systemLanguage: _systemLanguage,
+        );
       } else {
         await _clearStoredSession(preferences);
         _accessToken = null;
@@ -151,10 +163,12 @@ class AuthProvider extends ChangeNotifier {
     }
 
     final userData = Map<String, dynamic>.from(payload['user'] as Map);
+    final systemLanguage = _languageFrom(userData['system_language']);
     final user = UserModel(
       name: userData['username'] as String? ?? identifier,
       email: userData['email'] as String? ?? '',
       photoURL: '',
+      systemLanguage: systemLanguage,
     );
     final token = payload['access_token'] as String;
     final expirySeconds =
@@ -169,6 +183,7 @@ class AuthProvider extends ChangeNotifier {
         preferences.setInt(_expiryKey, expiresAt),
         preferences.setString(_usernameKey, user.name),
         preferences.setString(_emailKey, user.email),
+        preferences.setString(_systemLanguageKey, systemLanguage),
       ]);
       if (saved.any((success) => !success)) {
         await _clearStoredSession(preferences);
@@ -182,7 +197,52 @@ class AuthProvider extends ChangeNotifier {
     }
 
     _accessToken = token;
+    _systemLanguage = systemLanguage;
     _user = user;
+    notifyListeners();
+  }
+
+  Future<void> updateSystemLanguage(String language) async {
+    if (!supportedSystemLanguages.contains(language)) {
+      throw const AuthException('Unsupported system language.');
+    }
+
+    final token = _accessToken;
+    if (token == null) {
+      throw const AuthException('Sign in to save your system language.');
+    }
+
+    try {
+      final response = await _dio.patch<dynamic>(
+        '/api/users/me/system-language',
+        data: {'system_language': language},
+        options: Options(
+          headers: {'Authorization': 'Bearer $token'},
+        ),
+      );
+      final payload = response.data;
+      if (payload is! Map || payload['system_language'] != language) {
+        throw const AuthException(
+          'The server returned an invalid language preference.',
+        );
+      }
+
+      final preferences = await _preferencesFactory();
+      final saved = await preferences.setString(_systemLanguageKey, language);
+      if (!saved) {
+        throw const AuthException('Could not save your system language.');
+      }
+    } on DioException catch (error) {
+      throw AuthException(_messageFor(error));
+    } on AuthException {
+      rethrow;
+    } catch (error) {
+      debugPrint('Could not save the system language preference: $error');
+      throw const AuthException('Could not save your system language.');
+    }
+
+    _systemLanguage = language;
+    _user = _user?.copyWith(systemLanguage: language);
     notifyListeners();
   }
 
@@ -253,6 +313,16 @@ class AuthProvider extends ChangeNotifier {
       preferences.remove(_emailKey),
     ]);
   }
+
+  String _languageFrom(Object? value) {
+    if (value == null) return 'en';
+    if (value is String && supportedSystemLanguages.contains(value)) {
+      return value;
+    }
+    throw const AuthException(
+      'The server returned an unsupported system language.',
+    );
+  }
 }
 
 class OtpTiming {
@@ -278,10 +348,19 @@ class UserModel {
   final String name;
   final String email;
   final String photoURL;
+  final String systemLanguage;
 
   UserModel({
     required this.name,
     required this.email,
     required this.photoURL,
+    this.systemLanguage = 'en',
   });
+
+  UserModel copyWith({String? systemLanguage}) => UserModel(
+        name: name,
+        email: email,
+        photoURL: photoURL,
+        systemLanguage: systemLanguage ?? this.systemLanguage,
+      );
 }

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
+import '../../l10n/app_localizations_extensions.dart';
 import '../../core/constants/system_ui.dart';
 import '../../providers/auth_provider.dart';
 import '../../widgets/app_header.dart';
@@ -53,14 +55,21 @@ class _HomeScreenState extends State<HomeScreen> {
                       Positioned(
                         top: 18,
                         left: 18,
-                        child: _buildMenuButton(),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            _buildMenuButton(),
+                            const SizedBox(width: 8),
+                            const AppBrandLogo(
+                              assetPath: 'assets/images/logo.png',
+                            ),
+                          ],
+                        ),
                       ),
                       const Positioned(
                         top: 18,
                         right: 8,
-                        child: AppBrandControls(
-                          logoAssetPath: 'assets/images/logo.png',
-                        ),
+                        child: AppLanguageSelector(),
                       ),
                       Center(
                         child: Transform.translate(
@@ -94,9 +103,9 @@ class _HomeScreenState extends State<HomeScreen> {
                                     height: 0.95,
                                   ),
                                 ),
-                                const Text(
-                                  'Connecting People',
-                                  style: TextStyle(
+                                Text(
+                                  context.l10n.connectingPeople,
+                                  style: const TextStyle(
                                     color: Color(0xFF092C78),
                                     fontSize: 18,
                                     fontWeight: FontWeight.bold,
@@ -141,7 +150,7 @@ class _HomeScreenState extends State<HomeScreen> {
         color: const Color(0xFF06498E),
         borderRadius: BorderRadius.circular(5),
         child: IconButton(
-          tooltip: 'Open navigation menu',
+          tooltip: context.l10n.openNavigationMenu,
           constraints: const BoxConstraints.tightFor(width: 34, height: 34),
           padding: EdgeInsets.zero,
           icon: const Icon(Icons.menu, color: Colors.white, size: 20),
@@ -161,15 +170,22 @@ class _HomeScreenState extends State<HomeScreen> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
         elevation: 4,
       ),
-      child: const Row(
+      child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(
-            'Start Translating',
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+          Flexible(
+            child: Text(
+              context.l10n.startTranslating,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
           ),
-          SizedBox(width: 6),
-          Icon(Icons.chevron_right, size: 20),
+          const SizedBox(width: 6),
+          const Icon(Icons.chevron_right, size: 20),
         ],
       ),
     );
@@ -187,54 +203,54 @@ class _HomeScreenState extends State<HomeScreen> {
             // Main Features
             _buildDrawerItem(
               icon: Icons.home,
-              title: 'Home',
+              title: context.l10n.home,
               onTap: () => Navigator.pop(context),
             ),
             _buildDrawerItem(
               icon: Icons.translate,
-              title: 'Text Translation',
+              title: context.l10n.textTranslation,
               onTap: () => _navigateTo(const TextTranslationScreen()),
             ),
             _buildDrawerItem(
               icon: Icons.mic,
-              title: 'Speech Translation',
+              title: context.l10n.speechTranslation,
               onTap: () => _navigateTo(const RealTimeSpeechScreen()),
             ),
             _buildDrawerItem(
               icon: Icons.video_library,
-              title: 'Video Translation',
+              title: context.l10n.videoTranslation,
               onTap: () => _navigateTo(const VideoTranslationScreen()),
             ),
             _buildDrawerItem(
               icon: Icons.camera_alt,
-              title: 'Camera Translation',
+              title: context.l10n.cameraTranslation,
               onTap: () => _navigateTo(const CameraTranslationScreen()),
             ),
 
             // Education & Utilities (Under Development)
             _buildDrawerItem(
               icon: Icons.school,
-              title: 'Education Tools',
-              subtitle: 'Under Development',
+              title: context.l10n.educationTools,
+              subtitle: context.l10n.underDevelopment,
               onTap: () => _navigateTo(const LectureSummarizerScreen()),
             ),
             _buildDrawerItem(
               icon: Icons.offline_bolt,
-              title: 'Offline Packs',
-              subtitle: 'Under Development',
+              title: context.l10n.offlinePacks,
+              subtitle: context.l10n.underDevelopment,
               onTap: () => _navigateTo(const OfflinePacksScreen()),
             ),
             _buildDrawerItem(
               icon: Icons.motorcycle,
-              title: 'Driver Mode',
-              subtitle: 'Under Development',
+              title: context.l10n.driverMode,
+              subtitle: context.l10n.underDevelopment,
               onTap: () => _navigateTo(const MotoristModeScreen()),
             ),
 
             // Maps & Navigation
             _buildDrawerItem(
               icon: Icons.map,
-              title: 'Google Maps',
+              title: context.l10n.googleMaps,
               onTap: () => _navigateTo(const GoogleMapsScreen()),
             ),
 
@@ -243,17 +259,17 @@ class _HomeScreenState extends State<HomeScreen> {
             // Settings & Info
             _buildDrawerItem(
               icon: Icons.settings,
-              title: 'Settings',
+              title: context.l10n.settings,
               onTap: () => _navigateTo(const SettingsScreen()),
             ),
             _buildDrawerItem(
               icon: Icons.info,
-              title: 'About',
+              title: context.l10n.about,
               onTap: () => _showAboutDialog(context),
             ),
             _buildDrawerItem(
               icon: Icons.logout,
-              title: 'Log out',
+              title: context.l10n.logOut,
               onTap: () => _logout(context, closeDrawer: true),
             ),
           ],
@@ -372,7 +388,7 @@ class _HomeScreenState extends State<HomeScreen> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('About'),
+        title: Text(context.l10n.about),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -382,15 +398,15 @@ class _HomeScreenState extends State<HomeScreen> {
               'Mpuza',
               style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
             ),
-            const Text(
-              'Version 1.0.0',
-              style: TextStyle(color: Colors.grey),
+            Text(
+              context.l10n.version,
+              style: const TextStyle(color: Colors.grey),
             ),
             const SizedBox(height: 16),
-            const Text(
-              'Breaking language barriers in Rwanda, Africa & World.\n\n'
-              'Supporting Kinyarwanda, English, and French.\n\n'
-              '🇷🇼 Made with pride in Rwanda 🇷🇼\n\n'
+            Text(
+              '${context.l10n.aboutBlurb}\n\n'
+              '${context.l10n.supportedLanguages}\n\n'
+              '${context.l10n.madeWithPride}\n\n'
               'Developed by Prime Data Consulting Group LTD',
               textAlign: TextAlign.center,
             ),
@@ -399,7 +415,7 @@ class _HomeScreenState extends State<HomeScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('OK'),
+            child: Text(context.l10n.ok),
           ),
         ],
       ),

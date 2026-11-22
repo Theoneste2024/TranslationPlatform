@@ -5,7 +5,13 @@ class ApiConfig {
 
   static String get baseUrl {
     if (_configuredBaseUrl.isNotEmpty) {
-      return _configuredBaseUrl.replaceFirst(RegExp(r'/+$'), '');
+      final uri = Uri.parse(_configuredBaseUrl);
+      return Uri(
+        scheme: uri.scheme,
+        userInfo: uri.userInfo,
+        host: uri.host,
+        port: uri.hasPort ? uri.port : null,
+      ).toString();
     }
 
     final host = kIsWeb

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../l10n/app_localizations_extensions.dart';
+
 class VoiceCommandListener extends StatefulWidget {
   final Function(String) onCommand;
   final bool isListening;
@@ -41,7 +43,9 @@ class _VoiceCommandListenerState extends State<VoiceCommandListener> {
               ),
               const SizedBox(width: 8),
               Text(
-                widget.isListening ? 'Listening...' : 'Tap to speak',
+                widget.isListening
+                    ? context.l10n.listening
+                    : context.l10n.tapToSpeak,
                 style: const TextStyle(color: Colors.white),
               ),
               const Spacer(),

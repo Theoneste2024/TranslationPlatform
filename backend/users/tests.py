@@ -162,6 +162,56 @@ class UserAuthenticationTests(TestCase):
         self.assertEqual(allowed.json()['email'], user.email)
         self.assertEqual(allowed.json()['country'], 'United States')
 
+    def test_system_language_preference_is_authenticated_and_persisted(self):
+        endpoint = '/api/users/me/system-language'
+        self.assertEqual(self.client.get(endpoint).status_code, 401)
+
+        user = User.objects.create_user(
+            email='language@example.com',
+            username='language_user',
+            phone_number='+15551234580',
+            country='Rwanda',
+            gender='other',
+            password='Language-Strong-Passphrase-90',
+        )
+        token = issue_access_token(user)
+        headers = {'HTTP_AUTHORIZATION': f'Bearer {token}'}
+
+        current = self.client.get(endpoint, **headers)
+        self.assertEqual(current.status_code, 200)
+        self.assertEqual(current.json(), {'system_language': 'en'})
+
+        updated = self.client.patch(
+            endpoint,
+            data=json.dumps({'system_language': 'rw'}),
+            content_type='application/json',
+            **headers,
+        )
+        self.assertEqual(updated.status_code, 200)
+        self.assertEqual(updated.json(), {'system_language': 'rw'})
+        user.refresh_from_db()
+        self.assertEqual(user.system_language, 'rw')
+
+        invalid = self.client.patch(
+            endpoint,
+            data=json.dumps({'system_language': 'sw'}),
+            content_type='application/json',
+            **headers,
+        )
+        self.assertEqual(invalid.status_code, 400)
+        user.refresh_from_db()
+        self.assertEqual(user.system_language, 'rw')
+
+        login = self.post_json(
+            '/api/users/login',
+            {
+                'identifier': user.username,
+                'password': 'Language-Strong-Passphrase-90',
+            },
+        )
+        self.assertEqual(login.status_code, 200)
+        self.assertEqual(login.json()['user']['system_language'], 'rw')
+
     @override_settings(OTP_EXPIRY_SECONDS=937, OTP_RESEND_COOLDOWN_SECONDS=83)
     def test_otp_endpoints_return_configured_expiry_and_resend_values(self):
         signup = self.post_json(

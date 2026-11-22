@@ -16,6 +16,7 @@ class UserSerializer(serializers.ModelSerializer):
             "name",
             "phone_number",
             "gender",
+            "system_language",
             "email_verified",
             "first_name",
             "last_name",
@@ -79,6 +80,10 @@ class RegistrationSerializer(serializers.ModelSerializer):
 class LoginSerializer(serializers.Serializer):
     identifier = serializers.CharField()
     password = serializers.CharField(write_only=True, trim_whitespace=False)
+
+
+class SystemLanguagePreferenceSerializer(serializers.Serializer):
+    system_language = serializers.ChoiceField(choices=User.SystemLanguage.choices)
 
 
 class ResendVerificationSerializer(serializers.Serializer):

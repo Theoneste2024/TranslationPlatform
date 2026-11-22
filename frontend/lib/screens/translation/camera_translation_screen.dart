@@ -1,7 +1,11 @@
+// ignore_for_file: use_build_context_synchronously, deprecated_member_use
+
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:google_ml_kit/google_ml_kit.dart';
+
+import '../../l10n/app_localizations_extensions.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
@@ -78,7 +82,7 @@ class _CameraTranslationScreenState extends State<CameraTranslationScreen> {
 
     if (!hasPermission) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Camera permission required")),
+        SnackBar(content: Text(context.l10n.cameraPermissionRequired)),
       );
       return;
     }
@@ -135,8 +139,9 @@ class _CameraTranslationScreenState extends State<CameraTranslationScreen> {
       await textRecognizer.close();
 
       setState(() {
-        _extractedText =
-            extracted.isEmpty ? 'No text found in image' : extracted;
+        _extractedText = extracted.isEmpty
+            ? context.l10n.noTextFoundInImage
+            : extracted;
         _isProcessing = false;
       });
 
@@ -146,7 +151,7 @@ class _CameraTranslationScreenState extends State<CameraTranslationScreen> {
     } catch (e) {
       setState(() => _isProcessing = false);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Error processing image: $e")),
+        SnackBar(content: Text(context.l10n.imageProcessingFailed(e.toString()))),
       );
     }
   }
@@ -181,7 +186,7 @@ class _CameraTranslationScreenState extends State<CameraTranslationScreen> {
     } catch (e) {
       setState(() => _isProcessing = false);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Error translating text: $e")),
+        SnackBar(content: Text(context.l10n.imageTranslationFailed(e.toString()))),
       );
     }
   }
@@ -191,7 +196,7 @@ class _CameraTranslationScreenState extends State<CameraTranslationScreen> {
     return AppPageShell(
       child: Scaffold(
         appBar: AppBar(
-          title: const Text("Camera Translation"),
+          title: Text(context.l10n.cameraTranslation),
           leading: const AppMenuButton(),
           automaticallyImplyLeading: false,
           actions: [
@@ -227,12 +232,12 @@ class _CameraTranslationScreenState extends State<CameraTranslationScreen> {
                         height: 200,
                         width: double.infinity,
                         alignment: Alignment.center,
-                        child: const Column(
+                        child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Icon(Icons.camera_alt, size: 60),
-                            SizedBox(height: 10),
-                            Text("Take or Upload Image"),
+                            const Icon(Icons.camera_alt, size: 60),
+                            const SizedBox(height: 10),
+                            Text(context.l10n.takeOrUploadImage),
                           ],
                         ),
                       ),
@@ -243,15 +248,15 @@ class _CameraTranslationScreenState extends State<CameraTranslationScreen> {
                 icon: const Icon(Icons.camera),
                 label: Text(
                   _cameraDevice == CameraDevice.rear
-                      ? "Take Photo (Rear)"
-                      : "Take Photo (Front)",
+                      ? context.l10n.takeRearPhoto
+                      : context.l10n.takeFrontPhoto,
                 ),
               ),
               const SizedBox(height: 10),
               ElevatedButton.icon(
                 onPressed: _uploadPhoto,
                 icon: const Icon(Icons.photo),
-                label: const Text("Upload Photo"),
+                label: Text(context.l10n.uploadPhoto),
               ),
               const SizedBox(height: 20),
               if (_isProcessing) const CircularProgressIndicator(),

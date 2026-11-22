@@ -1,0 +1,449 @@
+{
+  "@@locale": "rw",
+  "appTitle": "Mpuza - Rwanda",
+  "retry": "Ongera ugerageze",
+  "continueToLogin": "Komeza winjire",
+  "selectLanguage": "Hitamo ururimi",
+  "languageEnglish": "Icyongereza",
+  "languageKinyarwanda": "Ikinyarwanda",
+  "languageFrench": "Igifaransa",
+  "languageUpdateFailed": "Ntibyashobotse guhindura ururimi: {error}",
+  "openNavigationMenu": "Fungura menu y'urujyendo",
+  "collapseSidebar": "Gufunga akabari ko ku ruhande",
+  "home": "Ahabanza",
+  "textTranslation": "Ubusemuzi bw'inyandiko",
+  "speechTranslation": "Ubusemuzi bw'ijwi",
+  "videoTranslation": "Ubusemuzi bwa videwo",
+  "cameraTranslation": "Ubusemuzi ukoresheje kamera",
+  "startTranslating": "Tangira gusemura",
+  "educationTools": "Ibikoresho by'uburezi",
+  "underDevelopment": "Biracyategurwa",
+  "offlinePacks": "Ubusemuzi butari kuri interineti",
+  "driverMode": "Uburyo bw'abatwara ibinyabiziga",
+  "googleMaps": "Google Maps",
+  "settings": "Igenamiterere",
+  "about": "Ibyerekeye",
+  "aboutBlurb": "Dukuraho inzitizi z'ururimi mu Rwanda, muri Afurika no ku isi.",
+  "supportedLanguages": "Dushyigikira Ikinyarwanda, Icyongereza n'Igifaransa.",
+  "madeWithPride": "🇷🇼 Byakozwe mu ishema mu Rwanda 🇷🇼",
+  "logOut": "Gusohoka",
+  "ok": "Yego",
+  "version": "Verisiyo 1.0.0",
+  "settingsTitle": "Igenamiterere rya porogaramu",
+  "darkMode": "Uburyo bwijimye",
+  "enableDarkTheme": "Koresha isura yijimye",
+  "defaultLanguage": "Ururimi mburabuzi",
+  "speechRate": "Umuvuduko w'ijwi",
+  "normal": "Bisanzwe",
+  "clearCache": "Siba amakuru y'agateganyo",
+  "cacheUsage": "Hakozwe {size}",
+  "welcomeBack": "Murakaza neza nanone",
+  "loginToContinue": "Injira kugira ukomeze gusemura.",
+  "emailOrUsername": "Imeyili cyangwa izina ukoresha",
+  "password": "Ijambo ry'ibanga",
+  "enterPassword": "Andika ijambo ry'ibanga",
+  "hidePassword": "Hisha ijambo ry'ibanga",
+  "showPassword": "Erekana ijambo ry'ibanga",
+  "forgotPassword": "Wibagiwe ijambo ry'ibanga?",
+  "login": "Injira",
+  "newToMpuza": "Ntabwo urakoresha MPUZA? ",
+  "createAccount": "Fungura konti",
+  "signupStepOne": "INTAMBWE YA 1 KURI 2",
+  "joinMpuza": "Iyunge na MPUZA utangire gusemura mu ndimi zitandukanye.",
+  "username": "Izina ukoresha",
+  "emailAddress": "Aderesi ya imeyili",
+  "invalidEmailAddress": "Andika aderesi ya imeyili yemewe",
+  "phoneNumber": "Nimero ya telefoni",
+  "continueLabel": "Komeza",
+  "alreadyHaveAccount": "Usanzwe ufite konti? ",
+  "signupStepTwo": "INTAMBWE YA 2 KURI 2",
+  "aboutYouAndSecurity": "Ibyerekeye nawe n'umutekano",
+  "gender": "Igitsina",
+  "male": "Gabo",
+  "female": "Gore",
+  "preferNotToSay": "Simbyifuza kuvuga",
+  "country": "Igihugu",
+  "countryRwanda": "Rwanda",
+  "countryBurundi": "Uburundi",
+  "countryDrCongo": "Repubulika Iharanira Demokarasi ya Kongo",
+  "countryKenya": "Kenya",
+  "countryTanzania": "Tanzaniya",
+  "countryUganda": "Uganda",
+  "createStrongPassword": "Kora ijambo ry'ibanga rikomeye",
+  "confirmPassword": "Emeza ijambo ry'ibanga",
+  "reenterPassword": "Ongera wandike ijambo ry'ibanga",
+  "passwordsDoNotMatch": "Amagambo y'ibanga ntahuye",
+  "passwordsMatch": "Amagambo y'ibanga arahuye",
+  "verifyYourEmail": "Emeza imeyili yawe",
+  "verificationCodeSentTo": "Twohereje kode y'imibare 6 kuri\n{email}",
+  "codeExpiresInPrefix": "Kode irarangira mu ",
+  "didntGetIt": "Ntabwo wayibonye? ",
+  "resendIn": "Ongera wohereze mu {duration}",
+  "resendCode": "Ongera wohereze kode",
+  "verify": "Emeza",
+  "wrongEmail": "Imeyili si yo? ",
+  "changeIt": "Yihindure",
+  "emailVerified": "Imeyili yemejwe!",
+  "accountReadyMessage": "Konti yawe ya MPUZA yiteguye. Injira ukoresheje imeyili cyangwa izina ukoresha utangire gusemura.",
+  "goToLogin": "Jya ku kwinjira",
+  "forgotPasswordInstructions": "Andika aderesi ya imeyili ijyanye na konti yawe ya MPUZA. Tuzohereza kode yo gusubiramo ijambo ry'ibanga.",
+  "sendResetCode": "Ohereza kode yo gusubiramo",
+  "rememberPassword": "Wibutse ijambo ry'ibanga? ",
+  "resetYourPassword": "Subiramo ijambo ry'ibanga",
+  "resetCodeSentTo": "Andika kode yohererejwe kuri\n{email}",
+  "newPassword": "Ijambo ry'ibanga rishya",
+  "confirmNewPassword": "Emeza ijambo ry'ibanga rishya",
+  "resetPassword": "Subiramo ijambo ry'ibanga",
+  "back": "Subira inyuma",
+  "weak": "Ryoroshye",
+  "fair": "Riringaniye",
+  "strong": "Rikomeye",
+  "passwordStrength": "Imbaraga z'ijambo ry'ibanga",
+  "eightPlusCharacters": "Inyuguti 8 cyangwa zirenga",
+  "uppercase": "Inyuguti nkuru",
+  "lowercase": "Inyuguti nto",
+  "numberAndSymbol": "Umubare n'ikimenyetso",
+  "requiredField": "Iki gice kirakenewe",
+  "passwordStrengthRequirement": "Koresha inyuguti 8 cyangwa zirenga, harimo inyuguti nkuru, nto, umubare n'ikimenyetso",
+  "selectGender": "Hitamo igitsina kugira ukomeze.",
+  "enterSixDigitCode": "Andika kode y'imibare 6 kugira ukomeze.",
+  "passwordResetComplete": "Ijambo ry'ibanga ryasubiwemo. Ushobora kwinjira ubu.",
+  "translationSuccessful": "Ubusemuzi bwagenze neza",
+  "translationTimedOut": "Ubusemuzi butinze kurenza uko byari byitezwe. Ongera ugerageze.",
+  "translationFailed": "Ubusemuzi bwanze: {error}",
+  "copiedToClipboard": "Byakoporowe!",
+  "removedFromFavorites": "Byakuwe mu byo ukunda!",
+  "savedToFavorites": "Byabitswe mu byo ukunda!",
+  "sourceText": "Inyandiko y'umwimerere",
+  "sourceTextHint": "Andika inyandiko ushaka gusemura...",
+  "characterCount": "Inyuguti: {count}",
+  "translating": "Birimo gusemurwa...",
+  "translate": "Semuza",
+  "translation": "Ubusemuzi",
+  "translationPlaceholder": "Ubusemuzi buzagaragara hano",
+  "cameraPermissionRequired": "Uruhushya rwa kamera rurakenewe",
+  "noTextFoundInImage": "Nta nyandiko yabonetse ku ifoto",
+  "imageProcessingFailed": "Ikosa mu gutunganya ifoto: {error}",
+  "imageTranslationFailed": "Ikosa mu gusemura inyandiko: {error}",
+  "takeOrUploadImage": "Fata cyangwa wohereze ifoto",
+  "takeRearPhoto": "Fata ifoto ukoresheje kamera y'inyuma",
+  "takeFrontPhoto": "Fata ifoto ukoresheje kamera y'imbere",
+  "uploadPhoto": "Ohereza ifoto",
+  "offlineTranslationPacks": "Amapaki yo gusemura udafite interineti",
+  "deviceStorage": "Ububiko bw'igikoresho",
+  "storageUsage": "Hakozwe {used} • hasigaye {free}",
+  "myPacks": "Amapaki yanjye",
+  "viewAll": "Reba byose",
+  "free": "Ubuntu",
+  "downloaded": "Yamanuwe",
+  "download": "Manura",
+  "downloadingPack": "Birimo kumanura {pack}...",
+  "cancel": "Hagarika",
+  "basicKinyarwandaPack": "Ipaki y'ibanze y'Ikinyarwanda",
+  "essentialPhrasesDescription": "Amagambo y'ingenzi n'ay'ikoreshwa rya buri munsi",
+  "completeKinyarwandaPack": "Ipaki yuzuye y'Ikinyarwanda",
+  "completeDictionaryDescription": "Inkoranyamagambo yuzuye y'Ikinyarwanda-Icyongereza- Igifaransa",
+  "motoristCommunicationPack": "Ipaki y'itumanaho ry'abatwara ibinyabiziga",
+  "transportationPhrasesDescription": "Amagambo ajyanye n'ingendo n'icyerekezo",
+  "medicalEmergencyPack": "Ipaki y'ubuvuzi n'ubutabazi bwihuse",
+  "healthcareVocabularyDescription": "Amagambo y'ubuvuzi n'ubutabazi",
+  "educationPack": "Ipaki y'uburezi",
+  "academicVocabularyDescription": "Amagambo n'ibisobanuro by'amasomo",
+  "tourismHospitalityPack": "Ipaki y'ubukerarugendo n'amahoteli",
+  "tourismPhrasesDescription": "Amagambo akoreshwa n'abakerarugendo mu mirimo",
+  "lectureSummarizer": "Incamake y'amasomo",
+  "comingSoon": "Biraza vuba!",
+  "autoSummarizeLectures": "Gukora incamake y'amasomo byikora",
+  "studyNotesGeneration": "Gukora inyandiko z'isomo",
+  "vocabularyExtraction": "Gutoranya amagambo y'ingenzi",
+  "backToHome": "Subira ahabanza",
+  "motoristModeActive": "Uburyo bw'abatwara burakora",
+  "listeningForCommands": "Birimo gutegereza amabwiriza...",
+  "tapToActivate": "Kanda kugira utangize",
+  "navigate": "Kuyobora",
+  "fare": "Igiciro",
+  "call": "Hamagara",
+  "currentlyNavigating": "Urimo kuyoborwa",
+  "readyForPassengers": "Witeguye kwakira abagenzi",
+  "followTheRoute": "Kurikira inzira",
+  "tapToStartNavigation": "Kanda utangire kuyoborwa",
+  "voiceCommands": "Amabwiriza y'ijwi",
+  "listening": "Birimo kumva...",
+  "tapToSpeak": "Kanda uvuge",
+  "enableLocationServices": "Fungura serivisi zo kumenya aho uri",
+  "locationPermissionDenied": "Uruhushya rwo kumenya aho uri rwanze",
+  "locationPermissionPermanentlyDenied": "Uruhushya rwo kumenya aho uri rwaranzwe burundu",
+  "showingKigaliCenter": "Hagaragazwa hagati mu Mujyi wa Kigali",
+  "placeSearchFailed": "Gushakisha byanze. Ongera ugerageze.",
+  "noPhoneAvailable": "Nta nimero ya telefoni ihari",
+  "placeCategory": "{category}",
+  "freeGeocodingNoApiKey": "Kumenya aho hantu ni ubuntu, nta rufunguzo rwa API",
+  "close": "Funga",
+  "navigateHere": "Nyobora hano",
+  "selectedLocation": "Ahantu wahisemo",
+  "setDestinationFirst": "Banza ushyireho aho ujya",
+  "headDirection": "Komeza werekeza {direction}",
+  "north": "mu majyaruguru",
+  "south": "mu majyepfo",
+  "east": "iburasirazuba",
+  "west": "iburengerazuba",
+  "northeast": "mu majyaruguru y'uburasirazuba",
+  "northwest": "mu majyaruguru y'iburengerazuba",
+  "southeast": "mu majyepfo y'uburasirazuba",
+  "southwest": "mu majyepfo y'iburengerazuba",
+  "offlineDirectRoute": "Inzira itari kuri interineti (umurongo ugororotse)",
+  "freeMapsRwanda": "🗺️ Amakarita y'ubuntu - Rwanda",
+  "liveLocationFreeGeocoding": "Ahantu uri ako kanya • kumenya ahantu ku buntu",
+  "hideNearbyPlaces": "Hisha ahantu hafi",
+  "myLocation": "Aho ndi",
+  "gettingLiveLocation": "Birimo gushaka aho uri...",
+  "zoomIn": "Kwegereza",
+  "zoomOut": "Kurekura",
+  "searchPlaceHint": "Shaka ahantu hose mu Rwanda...",
+  "nearbyPlaces": "Ahantu hafi",
+  "bestRoute": "Inzira nziza",
+  "destination": "Aho ujya",
+  "minutesAbbreviation": "Iminota {minutes}",
+  "distance": "Intera",
+  "travelMode": "Uburyo bw'urugendo",
+  "summary": "Incamake",
+  "routeReady": "Inzira yiteguye",
+  "setDestination": "Shyiraho aho ujya",
+  "getDirections": "Shaka icyerekezo",
+  "clearRoute": "Siba inzira",
+  "hospitals": "Ibitaro",
+  "hotels": "Amahoteri",
+  "restaurants": "Restaurants",
+  "coffeeShops": "Aho banywera ikawa",
+  "bars": "Utubari",
+  "car": "Imodoka",
+  "walk": "Kugenda n'amaguru",
+  "bicycle": "Igare",
+  "microphonePermissionRequired": "Uruhushya rwa mikoro rurakenewe kugira ngo umenye ijwi",
+  "noSpeechDetected": "Nta jambo ryumvikanye. Vuga neza wongere ugerageze.",
+  "microphonePermissionDenied": "Uruhushya rwa mikoro rwanze",
+  "speechRecognitionError": "Ikosa mu kumenya ijwi",
+  "speechRecognitionUnavailable": "Kumenya ijwi ntibishoboka. Emera gukoresha mikoro wongere ugerageze.",
+  "couldNotStartListening": "Ntibyashobotse gutangira kumva. Emera gukoresha mikoro wongere ugerageze.",
+  "browserMicrophonePermissionRequired": "Uruhushya rwa mikoro rurakenewe: koresha ikimenyetso cy'urufunguzo muri aderesi ya mushakisha wemere mikoro.",
+  "noMicrophoneDetected": "Nta mikoro yabonetse. Yomeke ku gikoresho.",
+  "microphoneReady": "Mikoro iriteguye. Vuga neza.",
+  "couldNotStartListeningWithError": "Ntibyashobotse gutangira kumva. Ikosa: {error}",
+  "audioSelected": "Amajwi yatoranyijwe: {fileName}",
+  "audioTranscribed": "Amajwi yanditswe neza!",
+  "audioSelectionFailed": "Ikosa mu guhitamo amajwi: {error}",
+  "selectedAudioCouldNotBeRead": "Dosiye y'amajwi yatoranyijwe ntiyasomwe.",
+  "emptySpeechTranslationResponse": "Igisubizo cy'ubusemuzi bw'ijwi kirimo ubusa.",
+  "translationCompleted": "Ubusemuzi bwarangiye",
+  "recordVoice": "Fata amajwi",
+  "uploadAudio": "Ohereza amajwi",
+  "fromLanguage": "Uvuye",
+  "toLanguage": "Ujya",
+  "outputOptions": "Uburyo bw'igisubizo:",
+  "textOutput": "📝 Inyandiko",
+  "audioOutput": "🔊 Amajwi",
+  "bothOutputs": "📝🔊 Byombi",
+  "processingAudio": "Birimo gutunganya amajwi...",
+  "convertingSpeechToText": "Guhindura ijwi rikaba inyandiko",
+  "tapToStartRecording": "Kanda utangire gufata amajwi",
+  "confidence": "Icyizere: {percentage}%",
+  "recognizedSpeech": "Ijwi ryumvikanye",
+  "shareComingSoon": "Gusangiza abandi bizaza vuba!",
+  "recentTranslations": "Ubusemuzi buheruka",
+  "liveTranslationTimedOut": "Gusemura ako kanya byarengeje igihe. Ongera ugerageze ukoresheje videwo ngufi.",
+  "mediaPermissionPermanentlyDenied": "Uruhushya rwa kamera cyangwa mikoro rwaranzwe burundu. Rwemerere mu igenamiterere rya porogaramu.",
+  "cameraMicrophonePermissionsRequired": "Uruhushya rwa kamera na mikoro rurakenewe kugira ngo ufate videwo.",
+  "chooseVideoSource": "Hitamo uko wongeramo videwo",
+  "recordVideo": "Fata videwo",
+  "recordVideoDescription": "Koresha kamera ufate videwo nshya",
+  "uploadVideoFromStorage": "Ohereza videwo iri mu bubiko bwa telefoni",
+  "pickVideoDescription": "Hitamo dosiye ya videwo iri kuri telefoni yawe",
+  "noVideoSelected": "Nta dosiye ya videwo wahisemo.",
+  "videoSelected": "Wahisemo videwo: {filename}",
+  "@videoSelected": {
+    "placeholders": {
+      "filename": {
+        "type": "String"
+      }
+    }
+  },
+  "videoPickFailed": "Ntibyashobotse guhitamo dosiye ya videwo: {error}",
+  "@videoPickFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "noVideoRecorded": "Nta videwo yafashwe.",
+  "videoRecorded": "Videwo yafashwe: {filename}",
+  "@videoRecorded": {
+    "placeholders": {
+      "filename": {
+        "type": "String"
+      }
+    }
+  },
+  "videoRecordFailed": "Ntibyashobotse gufata videwo: {error}",
+  "@videoRecordFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "noMediaSelected": "Nta bikoresho by'itangazamakuru byatoranyijwe",
+  "preparingLiveSubtitles": "Turimo gutegura inyandiko z'ubusemuzi bw'ako kanya...",
+  "invalidTranslationResponse": "Serivisi y'ubusemuzi yatanze igisubizo kidateganyijwe.",
+  "translationComplete": "Ubusemuzi burarangiye!",
+  "mediaUploadFailed": "Kohereza iby'itangazamakuru ntibyashobotse: {error}",
+  "@mediaUploadFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "enterYoutubeUrl": "Andika aderesi ya YouTube",
+  "youtubeLiveTranslationFailed": "Gusemura YouTube ako kanya ntibyashobotse",
+  "youtubeLiveTranslationFailedWithError": "Gusemura YouTube ako kanya ntibyashobotse: {error}",
+  "@youtubeLiveTranslationFailedWithError": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "noSpokenPhrasesDetected": "Nta nteruro zavuzwe zabonetse.",
+  "liveSubtitlesReady": "Inyandiko z'ubusemuzi bw'ako kanya ziriteguye.",
+  "liveTranslationFailed": "Gusemura ako kanya ntibyashobotse",
+  "emptyMediaSummaryResponse": "Igisubizo cy'incamake y'iby'itangazamakuru nta kintu kirimo.",
+  "summaryComplete": "Incamake irarangiye!",
+  "mediaSummarizationFailed": "Gukora incamake y'iby'itangazamakuru ntibyashobotse: {error}",
+  "@mediaSummarizationFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "emptyYoutubeSummaryResponse": "Igisubizo cy'incamake ya YouTube nta kintu kirimo.",
+  "youtubeSummarizationFailed": "Gukora incamake ya YouTube ntibyashobotse: {error}",
+  "@youtubeSummarizationFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "selectOrRecordVideo": "Banza uhitemo cyangwa ufate videwo.",
+  "enterYoutubeUrlOrSelectVideo": "Andika aderesi ya YouTube cyangwa ubanze uhitemo videwo.",
+  "youtube": "YouTube",
+  "video": "Videwo",
+  "youtubeUrl": "Aderesi ya YouTube",
+  "videoFile": "Dosiye ya videwo",
+  "tapToSelectOrRecordVideo": "Kanda uhitemo cyangwa ufate videwo",
+  "sourceLanguage": "Ururimi rw'inkomoko",
+  "targetLanguage": "Ururimi rw'ubusemuzi",
+  "auto": "Byikora",
+  "summaryForLanguage": "Incamake ({language}):",
+  "@summaryForLanguage": {
+    "placeholders": {
+      "language": {
+        "type": "String"
+      }
+    }
+  },
+  "liveTranscript": "Inyandiko ihinduka ako kanya:",
+  "targetLanguageOnly": "Ururimi rwa {language} gusa",
+  "@targetLanguageOnly": {
+    "placeholders": {
+      "language": {
+        "type": "String"
+      }
+    }
+  },
+  "showBothLanguages": "Erekana indimi zombi",
+  "stop": "Hagarika",
+  "listen": "Umva",
+  "studyTools": "Ibikoresho byo kwiga",
+  "summarize": "Gukora incamake",
+  "studyNotes": "Inyandiko zo kwiga",
+  "notesSaved": "Inyandiko zabitswe!",
+  "translateFirst": "Banza usemure",
+  "vocabulary": "Amagambo",
+  "keyVocabularyExtracted": "Amagambo y'ingenzi yatoranyijwe!",
+  "quiz": "Ikizamini",
+  "quizGenerationComingSoon": "Gukora ibizamini bizaboneka vuba!",
+  "textToSpeechError": "Ikosa mu gusoma inyandiko mu ijwi: {error}",
+  "@textToSpeechError": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "translatedSpokenPhrases": "Interuro {count} zavuzwe zasobanuwe...",
+  "@translatedSpokenPhrases": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "mediaContentContinues": "Ibindi bikurikira...",
+  "nothingToPlay": "Nta cyo kumva gihari. Banza usemure.",
+  "unableToPlayAudio": "Ntibyashobotse gucuranga amajwi: {error}",
+  "@unableToPlayAudio": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "noCameraFound": "Nta kamera yabonetse kuri iki gikoresho.",
+  "cameraOpenFailed": "Ntibyashobotse gufungura kamera: {error}",
+  "@cameraOpenFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "videoRecordingFailed": "Gufata videwo ntibyashobotse: {error}",
+  "@videoRecordingFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "stopRecording": "Hagarika gufata",
+  "startRecording": "Tangira gufata",
+  "rwandaAfricaWorld": "Rwanda • Afurika • Isi",
+  "developedByCompany": "Byakozwe na Prime Data Consulting Group LTD",
+  "connectingPeople": "Guhuza abantu",
+  "subtitlesGenerated": "Inyandiko z'amashusho zakozwe!",
+  "liveLocationActive": "Aho uri hagaragazwa ako kanya!",
+  "destinationSetTo": "Aho ujya hashyizwe kuri {location}",
+  "@destinationSetTo": {
+    "placeholders": {
+      "location": {
+        "type": "String"
+      }
+    }
+  },
+  "destinationSet": "Aho ujya hashyizweho",
+  "bestRouteSummary": "Inzira nziza: km {distance}, iminota {duration}",
+  "@bestRouteSummary": {
+    "placeholders": {
+      "distance": {
+        "type": "String"
+      },
+      "duration": {
+        "type": "String"
+      }
+    }
+  },
+  "offlineDirectLine": "Uburyo butari kuri interineti - umurongo ugororotse"
+}

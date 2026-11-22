@@ -17,7 +17,7 @@ class OfflineProvider extends ChangeNotifier {
 
   void _initConnectivity() {
     _connectivity.onConnectivityChanged.listen((result) {
-      _isOnline = result != ConnectivityResult.none;
+      _isOnline = !result.contains(ConnectivityResult.none);
       notifyListeners();
     });
   }

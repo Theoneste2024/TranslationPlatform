@@ -38,4 +38,9 @@ urlpatterns = [
         views.ProfileView.as_view(),
         name='users-profile',
     ),
+    path(
+        'api/users/me/system-language',
+        views.SystemLanguageView.as_view(),
+        name='users-system-language',
+    ),
 ]
